@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "12654915458",
+    "project_id": "mystasis-a6b7b",
+    "storage_bucket": "mystasis-a6b7b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12654915458:android:11ade2427fe5672fb9a99b",
+        "android_client_info": {
+          "package_name": "com.example.mystasis"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDLDZT5hF0yFxDHhoJ2e1YuEaLKeQsP8k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
