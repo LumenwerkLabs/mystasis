@@ -41,9 +41,9 @@ class _SignupScreenState extends State<SignupScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: MystasisTheme.deepBioTeal,
-                  onPrimary: Colors.white,
-                ),
+              primary: MystasisTheme.deepBioTeal,
+              onPrimary: Colors.white,
+            ),
           ),
           child: child!,
         );
@@ -80,8 +80,18 @@ class _SignupScreenState extends State<SignupScreen> {
 
   String _formatDate(DateTime date) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
@@ -105,7 +115,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     // Logo/Brand
                     Text(
                       'mystasis',
-                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      style: Theme.of(context).textTheme.headlineLarge
+                          ?.copyWith(
                             color: MystasisTheme.deepBioTeal,
                             fontWeight: FontWeight.w700,
                             letterSpacing: -0.5,
@@ -116,8 +127,8 @@ class _SignupScreenState extends State<SignupScreen> {
                     Text(
                       'Create your account',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: MystasisTheme.neutralGrey,
-                          ),
+                        color: MystasisTheme.neutralGrey,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 48),
@@ -130,7 +141,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             padding: const EdgeInsets.all(12),
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: MystasisTheme.errorRed.withValues(alpha: 0.1),
+                              color: MystasisTheme.errorRed.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Row(
@@ -144,7 +157,8 @@ class _SignupScreenState extends State<SignupScreen> {
                                 Expanded(
                                   child: Text(
                                     auth.errorMessage!,
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
                                           color: MystasisTheme.errorRed,
                                         ),
                                   ),
@@ -191,7 +205,9 @@ class _SignupScreenState extends State<SignupScreen> {
                         if (value == null || value.isEmpty) {
                           return 'Please enter your email';
                         }
-                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                        if (!RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        ).hasMatch(value)) {
                           return 'Please enter a valid email';
                         }
                         return null;
@@ -219,8 +235,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           style: _dateOfBirth != null
                               ? Theme.of(context).textTheme.bodyLarge
                               : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: MystasisTheme.neutralGrey,
-                                  ),
+                                  color: MystasisTheme.neutralGrey,
+                                ),
                         ),
                       ),
                     ),
@@ -236,9 +252,13 @@ class _SignupScreenState extends State<SignupScreen> {
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
                           ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
                       ),
                       validator: (value) {
@@ -264,9 +284,14 @@ class _SignupScreenState extends State<SignupScreen> {
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                            _obscureConfirmPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
                           ),
-                          onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                          onPressed: () => setState(
+                            () => _obscureConfirmPassword =
+                                !_obscureConfirmPassword,
+                          ),
                         ),
                       ),
                       validator: (value) {
@@ -310,7 +335,9 @@ class _SignupScreenState extends State<SignupScreen> {
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                         TextButton(
-                          onPressed: () => Navigator.of(context).pushReplacementNamed('/auth'),
+                          onPressed: () => Navigator.of(
+                            context,
+                          ).pushReplacementNamed('/login'),
                           child: const Text('Sign in'),
                         ),
                       ],

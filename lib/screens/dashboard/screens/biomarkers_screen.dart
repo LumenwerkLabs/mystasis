@@ -307,8 +307,9 @@ class _Biomarker {
   String get status {
     if (value >= optimalMin && value <= optimalMax) return 'optimal';
     final range = optimalMax - optimalMin;
-    if (value < optimalMin - range * 0.2 || value > optimalMax + range * 0.2)
+    if (value < optimalMin - range * 0.2 || value > optimalMax + range * 0.2) {
       return 'critical';
+    }
     return 'borderline';
   }
 

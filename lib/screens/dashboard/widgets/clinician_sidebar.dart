@@ -38,9 +38,7 @@ class ClinicianSidebar extends StatelessWidget {
             _buildLogo(),
             const SizedBox(height: 48),
             // Navigation items
-            Expanded(
-              child: _buildNavItems(),
-            ),
+            Expanded(child: _buildNavItems()),
             // Bottom section (logout, etc.)
             _buildBottomSection(context),
             const SizedBox(height: 24),
@@ -55,11 +53,7 @@ class ClinicianSidebar extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
-          Icon(
-            Icons.biotech_outlined,
-            color: Colors.white,
-            size: 32,
-          ),
+          Icon(Icons.biotech_outlined, color: Colors.white, size: 32),
           SizedBox(width: 12),
           Text(
             'mystasis',
@@ -77,11 +71,31 @@ class ClinicianSidebar extends StatelessWidget {
 
   Widget _buildNavItems() {
     final items = [
-      _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Overview'),
-      _NavItem(icon: Icons.science_outlined, activeIcon: Icons.science, label: 'Biomarkers'),
-      _NavItem(icon: Icons.watch_outlined, activeIcon: Icons.watch, label: 'Wearables'),
-      _NavItem(icon: Icons.assessment_outlined, activeIcon: Icons.assessment, label: 'Reports'),
-      _NavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+      _NavItem(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+        label: 'Overview',
+      ),
+      _NavItem(
+        icon: Icons.science_outlined,
+        activeIcon: Icons.science,
+        label: 'Biomarkers',
+      ),
+      _NavItem(
+        icon: Icons.watch_outlined,
+        activeIcon: Icons.watch,
+        label: 'Wearables',
+      ),
+      _NavItem(
+        icon: Icons.assessment_outlined,
+        activeIcon: Icons.assessment,
+        label: 'Reports',
+      ),
+      _NavItem(
+        icon: Icons.settings_outlined,
+        activeIcon: Icons.settings,
+        label: 'Settings',
+      ),
     ];
 
     return ListView.builder(
@@ -121,8 +135,13 @@ class ClinicianSidebar extends StatelessWidget {
             icon: Icons.logout,
             label: 'Sign Out',
             isSelected: false,
-            onTap: () {
-              context.read<AuthProvider>().signOut();
+            onTap: () async {
+              await context.read<AuthProvider>().signOut();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              } else {
+                null;
+              }
             },
           ),
         ],
@@ -174,8 +193,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
           color: widget.isSelected
               ? Colors.white.withValues(alpha: 0.2)
               : _isHovered
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.transparent,
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Material(
@@ -189,16 +208,22 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
                 children: [
                   Icon(
                     widget.icon,
-                    color: Colors.white.withValues(alpha: widget.isSelected ? 1.0 : 0.8),
+                    color: Colors.white.withValues(
+                      alpha: widget.isSelected ? 1.0 : 0.8,
+                    ),
                     size: 22,
                   ),
                   const SizedBox(width: 12),
                   Text(
                     widget.label,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: widget.isSelected ? 1.0 : 0.8),
+                      color: Colors.white.withValues(
+                        alpha: widget.isSelected ? 1.0 : 0.8,
+                      ),
                       fontSize: 15,
-                      fontWeight: widget.isSelected ? FontWeight.w500 : FontWeight.w400,
+                      fontWeight: widget.isSelected
+                          ? FontWeight.w500
+                          : FontWeight.w400,
                     ),
                   ),
                 ],
