@@ -1,0 +1,142 @@
+# Pipeline Configuration
+# Copy to .pipeline/config.local.yaml for local overrides
+
+# Project settings
+project:
+  name: mystasis
+  backend_path: ./server
+  frontend_path: ./
+  backend_claude_md: ./server/CLAUDE.md
+  frontend_claude_md: ./CLAUDE.md
+  
+# Pipeline behavior
+pipeline:
+  # Stop pipeline if critical issues found in review
+  stop_on_critical: true
+  
+  # Stop pipeline if critical security issues found
+  stop_on_security_critical: true
+  
+  # Require security audit for all changes
+  require_security_audit: true
+  
+  # Require documentation updates
+  require_documentation: true
+  
+  # Auto-commit after successful pipeline
+  auto_commit: false
+  
+  # Create PR after successful pipeline
+  auto_pr: false
+
+# Stage configuration
+stages:
+  plan:
+    enabled: true
+    timeout: 300  # seconds
+    
+  test:
+    enabled: true
+    timeout: 600
+    # Minimum test coverage percentage
+    min_coverage: 80
+    # Stack-specific test commands
+    backend_test_cmd: "cd server && npm test"
+    frontend_test_cmd: "flutter test"
+    
+  implement:
+    enabled: true
+    timeout: 900
+    # Run linter after implementation
+    run_lint: true
+    # Stack-specific lint commands
+    backend_lint_cmd: "cd server && npm run lint"
+    frontend_lint_cmd: "flutter analyze"
+    # Stack-specific build commands
+    backend_build_cmd: "cd server && npm run build"
+    frontend_build_cmd: "flutter build web --release"
+    
+  refactor:
+    enabled: true
+    timeout: 300
+    
+  review:
+    enabled: true
+    timeout: 300
+    # Severity levels that block merge
+    blocking_severities:
+      - CRITICAL
+      
+  security:
+    enabled: true
+    timeout: 300
+    # Run npm audit / flutter pub deps check
+    run_dependency_audit: true
+    blocking_severities:
+      - CRITICAL
+      - HIGH
+      
+  document:
+    enabled: true
+    timeout: 300
+    # Require changelog entry
+    require_changelog: true
+    # Require API doc updates for endpoint changes
+    require_api_docs: true
+    
+  finalize:
+    enabled: true
+    timeout: 300
+    # Commit message format (conventional)
+    commit_format: conventional
+    # Branch naming pattern
+    branch_pattern: "feature/{task_id}"
+
+# Agent settings
+agents:
+  # Model to use for agents (if configurable)
+  default_model: claude-sonnet-4-20250514
+  
+  # Agents that can use more expensive models for complex tasks
+  premium_agents:
+    - planner
+    - security-auditor
+
+# Medical safety settings (mystasis-specific)
+medical_safety:
+  # Always include disclaimers on LLM output
+  require_disclaimers: true
+  
+  # Prohibited patterns in LLM output
+  prohibited_patterns:
+    - "you have been diagnosed"
+    - "take \\d+ mg"
+    - "stop taking"
+    - "you should take"
+    
+  # Required patterns in LLM output
+  required_patterns:
+    - "healthcare provider|doctor|clinician"
+
+# Notification settings
+notifications:
+  # Notify on pipeline completion
+  on_complete: true
+  
+  # Notify on pipeline failure
+  on_failure: true
+  
+  # Channels (configure in environment)
+  # slack_webhook: $SLACK_WEBHOOK_URL
+  # email: $NOTIFICATION_EMAIL
+
+# Logging settings
+logging:
+  # Log level: debug, info, warn, error
+  level: info
+  
+  # Retain logs for N days
+  retention_days: 30
+  
+  # Include full agent responses in logs
+  verbose_agent_logs: false

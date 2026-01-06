@@ -17,7 +17,10 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "lint:ai": "claude -p 'Use the reviewer agent to check changes vs main. Output issues as: FILE:LINE - SEVERITY - DESCRIPTION'",
+    "test:generate": "claude -p 'Use the tester agent to generate tests for uncovered code in src/'",
+    "docs:check": "claude -p 'Use the documenter agent to verify README matches current implementation'"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
