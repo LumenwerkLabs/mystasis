@@ -1,0 +1,170 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model with role-based access
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String?
+  lastName  String?
+  role      UserRole @default(PATIENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  biomarkerValues BiomarkerValue[]
+  alerts          Alert[]
+  summaries       LLMSummary[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// Biomarker timeseries data
+model BiomarkerValue {
+  id        String        @id @default(uuid())
+  userId    String
+  type      BiomarkerType
+  value     Float
+  unit      String
+  timestamp DateTime
+  source    String?       // e.g., "apple_health", "lab_upload", "manual"
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([timestamp])
+  @@index([userId, type, timestamp])
+}
+
+// Alert model for biomarker threshold violations
+model Alert {
+  id        String        @id @default(uuid())
+  userId    String
+  type      BiomarkerType
+  severity  AlertSeverity
+  status    AlertStatus   @default(ACTIVE)
+  title     String
+  message   String
+  value     Float?
+  threshold Float?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+// LLM-generated summaries and insights
+model LLMSummary {
+  id            String      @id @default(uuid())
+  userId        String
+  type          SummaryType
+  content       String
+  structuredData Json?      // For structured flags and recommendations
+  audienceRole  UserRole    // PATIENT or CLINICIAN facing
+  modelVersion  String?     // Track which LLM version generated this
+  promptHash    String?     // For reproducibility
+  createdAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Enums
+enum UserRole {
+  PATIENT
+  CLINICIAN
+}
+
+enum BiomarkerType {
+  // Cardiovascular
+  HEART_RATE
+  HEART_RATE_VARIABILITY
+  BLOOD_PRESSURE_SYSTOLIC
+  BLOOD_PRESSURE_DIASTOLIC
+  RESTING_HEART_RATE
+
+  // Metabolic
+  GLUCOSE
+  HBA1C
+  CHOLESTEROL_TOTAL
+  CHOLESTEROL_LDL
+  CHOLESTEROL_HDL
+  TRIGLYCERIDES
+
+  // Fitness
+  STEPS
+  ACTIVE_CALORIES
+  SLEEP_DURATION
+  SLEEP_QUALITY
+  VO2_MAX
+
+  // Body composition
+  WEIGHT
+  BMI
+  BODY_FAT_PERCENTAGE
+
+  // Blood markers
+  VITAMIN_D
+  IRON
+  FERRITIN
+  B12
+  FOLATE
+
+  // Inflammation
+  CRP
+  ESR
+
+  // Hormones
+  TESTOSTERONE
+  CORTISOL
+  TSH
+  T3
+  T4
+
+  // Other
+  CUSTOM
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum SummaryType {
+  DAILY_RECAP
+  WEEKLY_SUMMARY
+  TREND_ANALYSIS
+  RISK_ASSESSMENT
+  WELLNESS_NUDGE
+  CLINICIAN_REPORT
+}

@@ -31,6 +31,8 @@
 
 ```
 server/
+├── prisma/
+│   └── schema.prisma              # Prisma schema (models, enums, relations)
 ├── src/
 │   ├── main.ts                    # Bootstrap, global filters/pipes/interceptors
 │   ├── app.module.ts              # Root module wiring
@@ -38,8 +40,7 @@ server/
 │   ├── core/
 │   │   └── prisma/                # Database access layer
 │   │       ├── prisma.module.ts
-│   │       ├── prisma.service.ts
-│   │       └── schema.prisma
+│   │       └── prisma.service.ts
 │   ├── common/                    # Shared utilities
 │   │   ├── dto/                   # Shared DTOs (BiomarkerDto, UserDto, etc.)
 │   │   ├── decorators/            # @ClinicianOnly(), @CurrentUser()
@@ -52,6 +53,7 @@ server/
 │       ├── auth/                  # Authentication & JWT
 │       ├── users/                 # User profiles and roles
 │       ├── health-data/           # Wearable sync, lab uploads, biomarker trends
+│       ├── alerts/                # Health alerts from biomarker threshold violations
 │       ├── llm/                   # LLM summaries and nudges
 │       ├── analytics/             # Cohort-level insights for clinics
 │       └── health/                # Health checks (/health, /live, /ready)
@@ -82,18 +84,36 @@ modules/[feature]/
 
 ## Domain Model
 
-**Core Entities:**
+**Core Entities (defined in `prisma/schema.prisma`):**
 
 | Entity | Description |
 |--------|-------------|
-| `User` | Patient or clinician with role-based access |
-| `BiomarkerValue` | Timeseries entry: user, biomarker type, timestamp, value, unit, source |
-| `Alert` | Generated from rules on biomarker trends |
+| `User` | Patient or clinician with email, hashed password, role, and profile data |
+| `BiomarkerValue` | Timeseries entry: user, biomarker type, timestamp, value, unit, source, metadata |
+| `Alert` | Generated from threshold violations: type, severity, status, value vs threshold |
 | `LLMSummary` | Generated text (clinician vs patient facing) plus structured flags |
 
-**Roles:**
-- `patient` — sees simplified biomarker trends and behavior nudges
-- `clinician` — sees rich timelines, risk flags, and summarized reports
+**User Roles (`UserRole` enum):**
+- `PATIENT` — sees simplified biomarker trends and behavior nudges
+- `CLINICIAN` — sees rich timelines, risk flags, and summarized reports
+
+**Alert Status Flow (`AlertStatus` enum):**
+- `ACTIVE` — Newly created, needs attention
+- `ACKNOWLEDGED` — User/clinician has seen it, taking action
+- `RESOLVED` — Underlying issue addressed
+- `DISMISSED` — Reviewed but no action needed
+
+**Alert Severity (`AlertSeverity` enum):**
+- `LOW`, `MEDIUM`, `HIGH`, `CRITICAL`
+
+**Biomarker Types (`BiomarkerType` enum):**
+- Cardiovascular: `HEART_RATE`, `HEART_RATE_VARIABILITY`, `BLOOD_PRESSURE_*`, etc.
+- Metabolic: `GLUCOSE`, `HBA1C`, `CHOLESTEROL_*`, `TRIGLYCERIDES`
+- Fitness: `STEPS`, `ACTIVE_CALORIES`, `SLEEP_*`, `VO2_MAX`
+- Body composition: `WEIGHT`, `BMI`, `BODY_FAT_PERCENTAGE`
+- Blood markers: `VITAMIN_D`, `IRON`, `FERRITIN`, `B12`, `FOLATE`
+- Hormones: `TESTOSTERONE`, `CORTISOL`, `TSH`, `T3`, `T4`
+- See `prisma/schema.prisma` for complete list
 
 ---
 
@@ -157,6 +177,16 @@ export class CreateBiomarkerDto {
 - Map Prisma errors to appropriate HTTP exceptions
 - LLM failures should degrade gracefully — return generic message, don't crash
 - Always include correlation IDs in error logs
+
+**Prisma Error Mappings (`PrismaExceptionFilter`):**
+
+| Prisma Code | HTTP Status | Meaning |
+|-------------|-------------|---------|
+| P2002 | 409 Conflict | Unique constraint violation |
+| P2025 | 404 Not Found | Record not found |
+| P2003 | 400 Bad Request | Foreign key constraint violation |
+| ValidationError | 400 Bad Request | Invalid data format |
+| InitializationError | 503 Unavailable | Database connection failed |
 
 ---
 
