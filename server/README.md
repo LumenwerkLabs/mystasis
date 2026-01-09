@@ -1,98 +1,186 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Mystasis Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Longevity-focused health platform backend that consolidates wearable data, lab results, and clinical information, then uses health-tuned LLMs to generate safe insights for patients and clinicians.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Quick Start
 
 ```bash
-$ npm install
+# Prerequisites
+node >= 20.x
+npm >= 10.x
+PostgreSQL >= 14
+
+# Installation
+npm install
+
+# Generate Prisma client
+npx prisma generate
+
+# Run migrations
+npx prisma migrate dev
+
+# Development
+npm run start:dev
+
+# Production
+npm run build
+npm run start:prod
 ```
 
-## Compile and run the project
+## Architecture
+
+```
+src/
+├── main.ts                    # App entry point
+├── app.module.ts              # Root module
+├── config/                    # Configuration
+├── core/
+│   └── prisma/                # Database access layer
+├── common/
+│   ├── decorators/            # @Roles(), @CurrentUser()
+│   ├── guards/                # JWT auth, role-based guards
+│   ├── filters/               # Exception filters
+│   └── dto/                   # Shared DTOs
+└── modules/
+    ├── auth/                  # Authentication & JWT
+    ├── users/                 # User management
+    ├── health-data/           # Biomarker data
+    ├── alerts/                # Health alerts
+    ├── llm/                   # LLM summaries and nudges
+    └── health/                # Health checks
+```
+
+## Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
+| `JWT_SECRET` | Secret for signing JWT tokens | Yes | - |
+| `JWT_EXPIRATION` | Token expiration time | No | `1d` |
+| `LLM_API_URL` | LLM service endpoint (OpenAI-compatible) | Yes | - |
+| `LLM_API_KEY` | API key for LLM service | Yes | - |
+| `LLM_MODEL` | LLM model identifier | Yes | - |
+| `PORT` | Server port | No | `3000` |
+| `NODE_ENV` | Environment (development/production) | No | `development` |
+
+### Example `.env` file
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+DATABASE_URL="postgresql://user:password@localhost:5432/mystasis?schema=public"
+JWT_SECRET="your-super-secret-jwt-key"
+JWT_EXPIRATION="1d"
+LLM_API_URL="https://api.openai.com/v1/chat/completions"
+LLM_API_KEY="sk-your-api-key"
+LLM_MODEL="gpt-4"
+PORT=3000
+NODE_ENV=development
 ```
 
-## Run tests
+## Authentication & Authorization
+
+### JWT Authentication
+
+Protected routes use `JwtAuthGuard` for Bearer token authentication:
+
+```typescript
+@UseGuards(JwtAuthGuard)
+@Get('profile')
+getProfile(@Request() req) {
+  return req.user;
+}
+```
+
+### Role-Based Access Control
+
+Use `@Roles()` decorator with `RolesGuard` to restrict access:
+
+```typescript
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.CLINICIAN)
+@Get('patients')
+getAllPatients() {
+  return this.patientsService.findAll();
+}
+```
+
+Available roles: `PATIENT`, `CLINICIAN`
+
+## LLM Integration
+
+The LLM service generates health insights with strict medical safety constraints.
+
+### Features
+
+- Health summaries from biomarker trends
+- Wellness nudges for patients
+- Clinician reports with structured flags
+
+### Safety Constraints
+
+All LLM outputs are sanitized to remove:
+- Diagnosis language ("you have diabetes")
+- Medication advice ("take 500mg")
+- Treatment prescriptions
+
+Every response includes a healthcare disclaimer.
+
+### Configuration
+
+LLM integration requires three environment variables:
+- `LLM_API_URL`: Endpoint compatible with OpenAI chat completions API
+- `LLM_API_KEY`: Authentication key
+- `LLM_MODEL`: Model identifier (e.g., "gpt-4", "claude-3-opus")
+
+## Testing
 
 ```bash
-# unit tests
-$ npm run test
+# Unit tests
+npm test
 
-# e2e tests
-$ npm run test:e2e
+# Watch mode
+npm run test:watch
 
-# test coverage
-$ npm run test:cov
+# E2E tests
+npm run test:e2e
+
+# Coverage report
+npm run test:cov
 ```
 
-## Deployment
+## Health Checks
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Endpoint | Purpose |
+|----------|---------|
+| `/health/live` | Liveness probe |
+| `/health/ready` | Readiness (DB connectivity) |
+| `/health` | Detailed health status |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## API Documentation
+
+When running in development, Swagger documentation is available at `/api/docs`.
+
+## Database
+
+Uses Prisma ORM with PostgreSQL. Key models:
+
+- `User` - Patients and clinicians
+- `BiomarkerValue` - Timeseries health data
+- `Alert` - Health threshold violations
+- `LLMSummary` - Generated insights
+
+### Migrations
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Create migration
+npx prisma migrate dev --name description
+
+# Apply migrations
+npx prisma migrate deploy
+
+# Reset database
+npx prisma migrate reset
 ```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
 
 ## License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Proprietary - All rights reserved.

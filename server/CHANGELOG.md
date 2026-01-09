@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Authentication & Authorization**
+  - `JwtAuthGuard` (`src/common/guards/jwt-auth.guard.ts`)
+    - JWT Bearer token authentication for protected routes
+    - Extracts token from Authorization header (case-insensitive Bearer prefix)
+    - Verifies token using injectable JWT service (flexible DI pattern)
+    - Attaches decoded payload to `request.user` for downstream handlers
+    - Proper error handling with `UnauthorizedException` for auth failures
+  - `RolesGuard` (`src/common/guards/roles.guard.ts`)
+    - Role-based access control (RBAC) for endpoint authorization
+    - Works with `@Roles()` decorator to restrict access by user role
+    - Supports multiple roles (OR logic - user needs any one of the specified roles)
+    - Handler-level decorators take precedence over class-level
+    - Throws `ForbiddenException` for unauthorized access attempts
+  - `@Roles()` Decorator (`src/common/decorators/roles.decorator.ts`)
+    - Declarative role requirements for routes and controllers
+    - Supports single or multiple `UserRole` values
+    - Integrates with `RolesGuard` via NestJS Reflector metadata
+
+- **LLM Integration** (`src/modules/llm/llm.service.ts`)
+  - `LlmService` for generating health insights using LLMs
+  - `generateSummary()`: Creates personalized health summaries from biomarker data
+    - Supports PATIENT_SUMMARY and CLINICIAN_REPORT types
+    - Uses 30-day biomarker trend window for analysis
+    - Saves generated summaries to database for audit trail
+  - `generateNudge()`: Creates motivational wellness nudges for patients
+    - Uses 7-day biomarker trend window
+    - Focuses on general wellness (sleep, exercise, hydration)
+  - **Medical Safety Features:**
+    - Content sanitization removes diagnosis language (e.g., "you have diabetes")
+    - Content sanitization removes medication advice (e.g., "take 500mg")
+    - All responses include mandatory healthcare disclaimer
+    - Prompts explicitly prohibit prescriptive medical advice
+    - Graceful degradation with fallback content on LLM failures
+  - Structured data extraction (flags, recommendations, questions for doctor)
+  - Comprehensive error logging for debugging and audit
+
 - **Database Layer (Prisma/PostgreSQL)**
   - Prisma ORM integration with PostgreSQL
   - Database schema with comprehensive models (User, BiomarkerValue, Alert, LLMSummary)
