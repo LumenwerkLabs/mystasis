@@ -1,10 +1,13 @@
 #!/bin/bash
 
 #===============================================================================
-# Mystasis Multi-Agent Development Pipeline
+# Mystasis Multi-Agent Development Pipeline (Interactive Mode)
 # 
 # A complete orchestration system for feature development following
 # best practices: Plan → Test → Implement → Review → Document → Deploy
+#
+# This version runs interactively - Claude will ask for approval before
+# writing files, giving you control over all changes.
 #
 # Project Structure:
 #   ./                  - Flutter frontend (project root)
@@ -67,6 +70,18 @@ print_step() {
     echo -e "${CYAN}▶ $1${NC}"
 }
 
+print_info() {
+    echo -e "${BLUE}ℹ $1${NC}"
+}
+
+print_success() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠ $1${NC}"
+}
+
 save_state() {
     local stage="$1"
     local status="$2"
@@ -102,38 +117,41 @@ get_target_path() {
     esac
 }
 
+wait_for_confirmation() {
+    local message="${1:-Continue to next stage?}"
+    echo ""
+    echo -e "${YELLOW}────────────────────────────────────────────────────────────────${NC}"
+    read -p "$(echo -e ${CYAN}"$message (y/n): "${NC})" -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Pipeline paused. Run './scripts/pipeline.sh resume <task-id>' to continue."
+        return 1
+    fi
+    return 0
+}
+
 #-------------------------------------------------------------------------------
 # Stack-Specific Commands
 #-------------------------------------------------------------------------------
 
 run_backend_tests() {
     print_step "Running backend tests..."
-    cd "$BACKEND_PATH" && npm test
+    (cd "$BACKEND_PATH" && npm test)
 }
 
 run_frontend_tests() {
     print_step "Running frontend tests..."
-    cd "$FRONTEND_PATH" && flutter test
+    (cd "$FRONTEND_PATH" && flutter test)
 }
 
 run_backend_lint() {
     print_step "Running backend linter..."
-    cd "$BACKEND_PATH" && npm run lint
+    (cd "$BACKEND_PATH" && npm run lint)
 }
 
 run_frontend_lint() {
     print_step "Running frontend analyzer..."
-    cd "$FRONTEND_PATH" && flutter analyze
-}
-
-run_backend_build() {
-    print_step "Building backend..."
-    cd "$BACKEND_PATH" && npm run build
-}
-
-run_frontend_build() {
-    print_step "Building frontend..."
-    cd "$FRONTEND_PATH" && flutter build web --release
+    (cd "$FRONTEND_PATH" && flutter analyze)
 }
 
 run_tests() {
@@ -168,80 +186,196 @@ run_lint() {
     esac
 }
 
-run_build() {
-    local target="$1"
-    case "$target" in
-        backend|server)
-            run_backend_build
-            ;;
-        frontend|flutter)
-            run_frontend_build
-            ;;
-        fullstack|all)
-            run_backend_build
-            run_frontend_build
-            ;;
-    esac
+#-------------------------------------------------------------------------------
+# Agent Invocation (Interactive Mode)
+#-------------------------------------------------------------------------------
+
+# Creates a prompt file for the agent session
+create_prompt_file() {
+    local task_id="$1"
+    local stage="$2"
+    local content="$3"
+    local prompt_file="$LOG_DIR/${task_id}-${stage}-prompt.md"
+    
+    echo "$content" > "$prompt_file"
+    echo "$prompt_file"
 }
 
-#-------------------------------------------------------------------------------
-# Agent Invocation Functions
-#-------------------------------------------------------------------------------
-
-invoke_agent() {
-    local agent_name="$1"
-    local prompt="$2"
-    local output_file="$3"
-    local task_id="$4"
+# Copies text to clipboard if possible
+copy_to_clipboard() {
+    local text="$1"
     
-    print_step "Invoking ${agent_name} agent..."
-    log_info "Agent: $agent_name | Task: $task_id"
-    
-    # Build the full prompt with agent context
-    local full_prompt="Use the ${agent_name} agent for this task.
-
-${prompt}
-
-Task ID: ${task_id}
-Timestamp: $(date -Iseconds)
-
-Project Structure:
-- Frontend (Flutter): $FRONTEND_PATH
-- Backend (NestJS): $BACKEND_PATH"
-
-    # Invoke Claude Code with the agent
-    if claude -p "$full_prompt" --output-format json > "$output_file" 2>&1; then
-        log_success "$agent_name agent completed successfully"
+    # Try different clipboard commands
+    if command -v pbcopy &> /dev/null; then
+        # macOS
+        echo "$text" | pbcopy
         return 0
-    else
-        log_error "$agent_name agent failed"
-        return 1
+    elif command -v xclip &> /dev/null; then
+        # Linux with xclip
+        echo "$text" | xclip -selection clipboard
+        return 0
+    elif command -v xsel &> /dev/null; then
+        # Linux with xsel
+        echo "$text" | xsel --clipboard --input
+        return 0
     fi
+    return 1
 }
 
+# Runs Claude interactively with the given prompt
+# User will see and approve all file changes
 invoke_agent_interactive() {
     local agent_name="$1"
     local prompt="$2"
+    local task_id="$3"
+    local stage="$4"
     
-    print_step "Starting interactive session with ${agent_name} agent..."
+    print_step "Preparing ${agent_name} agent session..."
+    echo ""
     
-    claude -p "Use the ${agent_name} agent. 
+    # Build the full prompt
+    local full_prompt="Use the ${agent_name} agent for this task.
 
-Project Structure:
-- Frontend (Flutter): $FRONTEND_PATH  
-- Backend (NestJS): $BACKEND_PATH
+## Task ID: ${task_id}
+## Stage: ${stage}
 
-${prompt}"
+## Project Structure
+- Frontend (Flutter): ${FRONTEND_PATH}
+- Backend (NestJS): ${BACKEND_PATH}
+- Frontend CLAUDE.md: ./CLAUDE.md
+- Backend CLAUDE.md: ./server/CLAUDE.md
+
+## Instructions
+${prompt}
+
+Please proceed with the task. I will review and approve any file changes."
+
+    # Save the prompt for reference
+    local prompt_file=$(create_prompt_file "$task_id" "$stage" "$full_prompt")
+    log_info "Prompt saved to: $prompt_file"
+    
+    # Try to copy to clipboard
+    local clipboard_status=""
+    if copy_to_clipboard "$full_prompt"; then
+        clipboard_status="${GREEN}✓ Prompt copied to clipboard${NC}"
+    else
+        clipboard_status="${YELLOW}⚠ Could not copy to clipboard (install pbcopy/xclip)${NC}"
+    fi
+    
+    # Display instructions
+    local agent_upper=$(echo "$agent_name" | tr '[:lower:]' '[:upper:]')
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${CYAN}  ${agent_upper} AGENT - Stage: ${stage}${NC}"
+    echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
+    echo ""
+    echo -e "$clipboard_status"
+    echo -e "Prompt file: ${BLUE}$prompt_file${NC}"
+    echo ""
+    echo -e "${YELLOW}Instructions:${NC}"
+    echo -e "  1. Claude will open in interactive mode"
+    echo -e "  2. ${GREEN}Paste the prompt${NC} (Cmd+V / Ctrl+V) to start"
+    echo -e "  3. Review and approve file changes as proposed"
+    echo -e "  4. Type ${CYAN}/exit${NC} or press ${CYAN}Ctrl+C${NC} when done"
+    echo ""
+    
+    # Show prompt preview (truncated)
+    echo -e "${PURPLE}── Prompt Preview ──────────────────────────────────────────${NC}"
+    echo "$full_prompt" | head -20
+    if [[ $(echo "$full_prompt" | wc -l) -gt 20 ]]; then
+        echo -e "${YELLOW}... (truncated, full prompt in clipboard/file)${NC}"
+    fi
+    echo -e "${PURPLE}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    
+    # Ask user to confirm before launching
+    read -p "$(echo -e ${CYAN}"Press Enter to launch Claude, 's' to skip, 'p' to print full prompt: "${NC})" response
+    
+    case "$response" in
+        s|skip)
+            print_warning "Stage skipped by user"
+            return 0
+            ;;
+        p|print)
+            echo ""
+            echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━ FULL PROMPT ━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo "$full_prompt"
+            echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+            echo ""
+            read -p "$(echo -e ${CYAN}"Press Enter to launch Claude: "${NC})"
+            ;;
+    esac
+    
+    # Launch Claude with TTY access (no piping)
+    cd "$PROJECT_ROOT"
+    
+    echo ""
+    echo -e "${GREEN}Launching Claude... Paste the prompt to begin.${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+    
+    # Run claude directly - this preserves TTY
+    claude || true
+    
+    echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    
+    # Log completion
+    log_info "Agent session completed: $agent_name | Task: $task_id | Stage: $stage"
+    
+    return 0
+}
+
+# Alternative: Opens Claude with a prompt and lets user continue interactively
+invoke_agent_with_continue() {
+    local agent_name="$1"
+    local prompt="$2"
+    local task_id="$3"
+    local stage="$4"
+    
+    print_step "Launching ${agent_name} agent session..."
+    print_info "This will open an interactive Claude session."
+    print_info "Complete the task, then exit with 'exit' or Ctrl+D."
+    echo ""
+    
+    # Save prompt for reference
+    local prompt_file=$(create_prompt_file "$task_id" "$stage" "$prompt")
+    
+    # Create a temporary file with the initial prompt
+    local init_file=$(mktemp)
+    cat > "$init_file" << EOF
+Use the ${agent_name} agent for this task.
+
+## Task ID: ${task_id}
+## Stage: ${stage}
+
+## Project Structure
+- Frontend (Flutter): ${FRONTEND_PATH}
+- Backend (NestJS): ${BACKEND_PATH}
+
+## Instructions
+${prompt}
+EOF
+
+    echo -e "${CYAN}─────────────────── Claude Session Start ───────────────────${NC}"
+    echo ""
+    
+    # Run Claude with the initial prompt, then continue interactively
+    cd "$PROJECT_ROOT"
+    claude -p "$(cat $init_file)" --continue
+    
+    echo ""
+    echo -e "${CYAN}────────────────────── Claude Session End ──────────────────${NC}"
+    
+    rm -f "$init_file"
+    return 0
 }
 
 #-------------------------------------------------------------------------------
-# Pipeline Stages
+# Pipeline Stages (Interactive)
 #-------------------------------------------------------------------------------
 
 stage_plan() {
     local requirement="$1"
     local task_id="$2"
-    local output_file="$LOG_DIR/${task_id}-01-plan.json"
     
     print_header "Stage 1: Planning"
     save_state "planning" "in_progress" "$task_id"
@@ -252,7 +386,7 @@ ${requirement}
 
 Your plan must include:
 1. Summary of changes needed
-2. Affected files and modules
+2. Affected files and modules  
 3. New files to create
 4. Dependencies or migrations required
 5. Potential risks and breaking changes
@@ -260,49 +394,37 @@ Your plan must include:
 7. Acceptance criteria for verification
 8. Test scenarios to cover
 
-Project Structure:
-- Frontend (Flutter): Root directory (./)
-  - lib/ for source code
-  - CLAUDE.md for frontend context
-- Backend (NestJS): ./server/
-  - src/modules/ for feature modules
-  - server/CLAUDE.md for backend context
-
 Consider the mystasis architecture:
-- Backend: NestJS modular monolith in ./server (modules/health-data, modules/llm, etc.)
-- Frontend: Flutter with feature-first structure in ./lib
-- Medical safety constraints for any LLM-related changes"
+- Backend: NestJS modular monolith in ./server/ (modules/health-data, modules/llm, etc.)
+- Frontend: Flutter with feature-first structure in ./lib/
+- Medical safety constraints for any LLM-related changes
 
-    if invoke_agent "planner" "$prompt" "$output_file" "$task_id"; then
-        save_state "planning" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "planning" "failed" "$task_id"
-        return 1
-    fi
+Please explore the codebase first to understand existing patterns, then create the plan."
+
+    invoke_agent_interactive "planner" "$prompt" "$task_id" "01-plan"
+    
+    save_state "planning" "completed" "$task_id"
+    print_success "Planning stage completed"
+    return 0
 }
 
 stage_test_first() {
-    local plan_file="$1"
-    local task_id="$2"
-    local target="${3:-backend}" # backend or frontend
-    local output_file="$LOG_DIR/${task_id}-02-tests.json"
+    local task_id="$1"
+    local target="${2:-backend}"
     
-    print_header "Stage 2: Test-First Development"
+    print_header "Stage 2: Test-First Development (TDD)"
     save_state "testing" "in_progress" "$task_id"
     
     local target_path=$(get_target_path "$target")
     
-    local prompt="Based on the implementation plan, write comprehensive tests BEFORE implementation.
+    local prompt="Based on the implementation plan from the previous stage, write comprehensive tests BEFORE implementation.
 
-Plan file: ${plan_file}
 Target: ${target}
 Target path: ${target_path}
 
 For backend (NestJS) in ./server/:
 - Unit tests for services with mocked dependencies
-- Integration tests for controllers with supertest
+- Integration tests for controllers with supertest  
 - Test file location: alongside the service/controller with .spec.ts extension
 - Run tests with: cd server && npm test
 
@@ -313,38 +435,32 @@ For frontend (Flutter) in ./:
 - Run tests with: flutter test
 
 Requirements:
-1. Tests must be written to FAIL initially (TDD red phase)
+1. Tests should define the expected behavior (TDD red phase)
 2. Cover happy path, edge cases, and error conditions
-3. Include test descriptions that document expected behavior
+3. Include descriptive test names that document behavior
 4. Mock external dependencies (API calls, database, LLM)
-5. For medical features, test safety constraint enforcement"
+5. For medical features, test safety constraint enforcement
 
-    if invoke_agent "tester" "$prompt" "$output_file" "$task_id"; then
-        save_state "testing" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "testing" "failed" "$task_id"
-        return 1
-    fi
+Write the test files now. They should fail initially since implementation doesn't exist yet."
+
+    invoke_agent_interactive "tester" "$prompt" "$task_id" "02-test"
+    
+    save_state "testing" "completed" "$task_id"
+    print_success "Test-first stage completed"
+    return 0
 }
 
 stage_implement() {
-    local plan_file="$1"
-    local test_file="$2"
-    local task_id="$3"
-    local target="${4:-backend}"
-    local output_file="$LOG_DIR/${task_id}-03-implement.json"
+    local task_id="$1"
+    local target="${2:-backend}"
     
     print_header "Stage 3: Implementation"
     save_state "implementing" "in_progress" "$task_id"
     
     local target_path=$(get_target_path "$target")
     
-    local prompt="Implement the feature to pass all tests.
+    local prompt="Implement the feature to pass all tests written in the previous stage.
 
-Plan: ${plan_file}
-Tests: ${test_file}
 Target: ${target}
 Target path: ${target_path}
 
@@ -357,37 +473,35 @@ Implementation requirements:
 
 For backend (./server/):
 - Business logic in services, not controllers
-- Use DTOs for all inputs/outputs
+- Use DTOs for all inputs/outputs  
 - Use dependency injection
 - Handle errors with appropriate exceptions
-- Run: cd server && npm test && npm run lint
+- Verify with: cd server && npm test && npm run lint
 
 For frontend (./):
 - Use theme tokens, no hardcoded styles
 - Business logic in controllers, not widgets
 - Handle loading/error/success states
 - Ensure responsive design (mobile + web)
-- Run: flutter test && flutter analyze
+- Verify with: flutter test && flutter analyze
 
 Medical safety (if applicable):
 - Never generate diagnoses or medication changes
 - Include appropriate disclaimers
-- Defer to clinician language"
+- Use clinician deferral language
 
-    if invoke_agent "developer" "$prompt" "$output_file" "$task_id"; then
-        save_state "implementing" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "implementing" "failed" "$task_id"
-        return 1
-    fi
+Implement the code now, running tests to verify as you go."
+
+    invoke_agent_interactive "developer" "$prompt" "$task_id" "03-implement"
+    
+    save_state "implementing" "completed" "$task_id"
+    print_success "Implementation stage completed"
+    return 0
 }
 
 stage_refactor() {
     local task_id="$1"
     local target="${2:-backend}"
-    local output_file="$LOG_DIR/${task_id}-04-refactor.json"
     
     print_header "Stage 4: Refactoring"
     save_state "refactoring" "in_progress" "$task_id"
@@ -399,9 +513,9 @@ stage_refactor() {
 Target: ${target}
 Target path: ${target_path}
 
-Check for:
+Check for and improve:
 1. Code duplication - extract shared logic
-2. Long functions - break into smaller units
+2. Long functions - break into smaller units  
 3. Complex conditionals - simplify or extract
 4. Naming clarity - rename unclear variables/functions
 5. Performance concerns - optimize if needed
@@ -410,26 +524,23 @@ Check for:
 Constraints:
 - All tests must still pass after refactoring
 - No functional changes, only structural improvements
-- Run linter after changes
 
 Verification:
 - Backend: cd server && npm test && npm run lint
-- Frontend: flutter test && flutter analyze"
+- Frontend: flutter test && flutter analyze
 
-    if invoke_agent "developer" "$prompt" "$output_file" "$task_id"; then
-        save_state "refactoring" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "refactoring" "failed" "$task_id"
-        return 1
-    fi
+Review the code and make any refactoring improvements while keeping tests green."
+
+    invoke_agent_interactive "developer" "$prompt" "$task_id" "04-refactor"
+    
+    save_state "refactoring" "completed" "$task_id"
+    print_success "Refactoring stage completed"
+    return 0
 }
 
 stage_review() {
     local task_id="$1"
     local target="${2:-all}"
-    local output_file="$LOG_DIR/${task_id}-05-review.json"
     
     print_header "Stage 5: Code Review"
     save_state "reviewing" "in_progress" "$task_id"
@@ -441,15 +552,16 @@ Backend path: ./server/
 Frontend path: ./
 
 Review checklist:
+
 1. CORRECTNESS
    - Logic errors or edge cases missed
    - Null/undefined handling
    - Off-by-one errors
    - Race conditions (async code)
 
-2. SECURITY
+2. SECURITY  
    - Input validation completeness
-   - SQL injection (check Prisma usage in ./server/)
+   - SQL injection (check Prisma usage)
    - XSS vulnerabilities (frontend)
    - Sensitive data exposure
    - Auth/authz bypass potential
@@ -476,27 +588,24 @@ Review checklist:
    - Edge cases covered
    - Error conditions tested
 
-Output format for each issue:
+Use git diff to see changes, then provide a detailed review with:
 - Severity: CRITICAL / WARNING / SUGGESTION
-- File: path/to/file (relative to project root)
-- Line: approximate line number
-- Issue: description
-- Fix: suggested resolution"
+- File and approximate line
+- Issue description
+- Suggested fix
 
-    if invoke_agent "reviewer" "$prompt" "$output_file" "$task_id"; then
-        save_state "reviewing" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "reviewing" "failed" "$task_id"
-        return 1
-    fi
+If you find issues, fix them directly."
+
+    invoke_agent_interactive "reviewer" "$prompt" "$task_id" "05-review"
+    
+    save_state "reviewing" "completed" "$task_id"
+    print_success "Review stage completed"
+    return 0
 }
 
 stage_security() {
     local task_id="$1"
     local target="${2:-all}"
-    local output_file="$LOG_DIR/${task_id}-06-security.json"
     
     print_header "Stage 6: Security Audit"
     save_state "security" "in_progress" "$task_id"
@@ -510,24 +619,24 @@ Frontend path: ./
 Security checklist for health platform:
 
 1. AUTHENTICATION & AUTHORIZATION
-   - JWT validation on all protected routes (server/src/common/guards/)
+   - JWT validation on all protected routes
    - Role checks (patient vs clinician) enforced
    - No privilege escalation paths
 
-2. DATA PROTECTION
+2. DATA PROTECTION  
    - PHI (Protected Health Information) handling
    - Data encryption in transit and at rest
    - Audit logging for sensitive operations
    - No PII in logs or error messages
 
 3. INPUT VALIDATION
-   - All user inputs sanitized (server/src/modules/*/dto/)
+   - All user inputs sanitized
    - File upload restrictions (if applicable)
    - API rate limiting considered
 
 4. DEPENDENCY SECURITY
-   - Backend: cd server && npm audit
-   - Frontend: flutter pub deps
+   - Run: cd server && npm audit
+   - Run: flutter pub deps
    - Check for known vulnerabilities
 
 5. SECRETS MANAGEMENT
@@ -535,26 +644,24 @@ Security checklist for health platform:
    - Environment variables used correctly
    - API keys not exposed to frontend
 
-Report any findings with:
+Report findings with:
 - Severity: CRITICAL / HIGH / MEDIUM / LOW
-- CWE ID (if applicable)
+- CWE ID (if applicable)  
 - Description
-- Remediation steps"
+- Remediation steps
 
-    if invoke_agent "security-auditor" "$prompt" "$output_file" "$task_id"; then
-        save_state "security" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "security" "failed" "$task_id"
-        return 1
-    fi
+Fix any critical or high severity issues directly."
+
+    invoke_agent_interactive "security-auditor" "$prompt" "$task_id" "06-security"
+    
+    save_state "security" "completed" "$task_id"
+    print_success "Security audit completed"
+    return 0
 }
 
 stage_document() {
     local task_id="$1"
     local target="${2:-all}"
-    local output_file="$LOG_DIR/${task_id}-07-document.json"
     
     print_header "Stage 7: Documentation"
     save_state "documenting" "in_progress" "$task_id"
@@ -574,51 +681,50 @@ Documentation requirements:
 
 2. README UPDATES
    - ./README.md for project-level changes
-   - ./server/README.md for backend-specific changes
+   - ./server/README.md for backend-specific changes  
    - New features documented
    - New environment variables listed
 
 3. API DOCUMENTATION
-   - New endpoints documented (OpenAPI/Swagger in ./server/)
+   - New endpoints documented (OpenAPI/Swagger)
    - Request/response examples
    - Error codes and meanings
    - Auth requirements
 
 4. CHANGELOG
-   - ./CHANGELOG.md at project root
-   - Entry following Keep a Changelog format
-   - Categorize: Added, Changed, Fixed, Removed
+   - Update ./CHANGELOG.md at project root
+   - Follow Keep a Changelog format
+   - Categories: Added, Changed, Fixed, Removed
    - Reference issue/ticket numbers
 
-5. CLAUDE.md FILES
-   - Update ./CLAUDE.md if frontend patterns changed
-   - Update ./server/CLAUDE.md if backend patterns changed
+5. CLAUDE.md FILES (if patterns changed)
+   - Update ./CLAUDE.md for frontend changes
+   - Update ./server/CLAUDE.md for backend changes
 
 For medical features, also document:
 - Safety constraints implemented
-- Clinical validation requirements
-- Compliance considerations"
+- Compliance considerations
 
-    if invoke_agent "documenter" "$prompt" "$output_file" "$task_id"; then
-        save_state "documenting" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "documenting" "failed" "$task_id"
-        return 1
-    fi
+Update the documentation files now."
+
+    invoke_agent_interactive "documenter" "$prompt" "$task_id" "07-document"
+    
+    save_state "documenting" "completed" "$task_id"
+    print_success "Documentation stage completed"
+    return 0
 }
 
 stage_finalize() {
     local task_id="$1"
     local branch_name="$2"
     local target="${3:-all}"
-    local output_file="$LOG_DIR/${task_id}-08-finalize.json"
     
     print_header "Stage 8: Finalization"
     save_state "finalizing" "in_progress" "$task_id"
     
     local prompt="Finalize the changes for commit and PR.
+
+Branch: ${branch_name}
 
 Tasks:
 1. Run final test suite and confirm all pass
@@ -626,14 +732,12 @@ Tasks:
    - Frontend: flutter test
 
 2. Run linter and fix any remaining issues
-   - Backend: cd server && npm run lint
+   - Backend: cd server && npm run lint  
    - Frontend: flutter analyze
 
-3. Build and verify
-   - Backend: cd server && npm run build
-   - Frontend: flutter build web --release
+3. Review all changes with: git status && git diff --stat
 
-4. Stage all changes with git add
+4. Stage changes: git add -A
 
 5. Create atomic commits with conventional commit messages:
    - feat: for new features
@@ -641,35 +745,184 @@ Tasks:
    - docs: for documentation
    - refactor: for code restructuring
    - test: for test additions
+
+   Format:
+   type(scope): brief description
    
-6. Push to branch: ${branch_name}
+   - Detailed point 1
+   - Detailed point 2
+   
+   Refs: #issue-number
 
-7. Prepare PR description with:
-   - Summary of changes
-   - Testing performed
-   - Screenshots (if UI changes)
-   - Checklist for reviewer
+6. Show final status and next steps for the user
 
-Commit message format:
-type(scope): brief description
+Do NOT push - let the user review and push manually."
 
-- Detailed bullet point 1
-- Detailed bullet point 2
-
-Refs: #issue-number"
-
-    if invoke_agent "developer" "$prompt" "$output_file" "$task_id"; then
-        save_state "finalizing" "completed" "$task_id"
-        echo "$output_file"
-        return 0
-    else
-        save_state "finalizing" "failed" "$task_id"
-        return 1
-    fi
+    invoke_agent_interactive "developer" "$prompt" "$task_id" "08-finalize"
+    
+    save_state "finalizing" "completed" "$task_id"
+    print_success "Finalization stage completed"
+    return 0
 }
 
 #-------------------------------------------------------------------------------
-# Full Pipeline Orchestration
+# Single Session Pipeline (Recommended - maintains context)
+#-------------------------------------------------------------------------------
+
+run_single_session_pipeline() {
+    local requirement="$1"
+    local target="${2:-backend}"
+    local task_id=$(generate_task_id)
+    local branch_name="feature/${task_id}"
+    
+    print_header "🚀 Starting Single-Session Pipeline"
+    echo -e "${BLUE}Task ID:${NC}     $task_id"
+    echo -e "${BLUE}Target:${NC}      $target"
+    echo -e "${BLUE}Branch:${NC}      $branch_name"
+    echo -e "${BLUE}Requirement:${NC} $requirement"
+    echo ""
+    
+    log_info "Starting single-session pipeline for task $task_id"
+    
+    cd "$PROJECT_ROOT"
+    
+    # Create feature branch
+    print_step "Creating feature branch..."
+    git checkout -b "$branch_name" 2>/dev/null || git checkout "$branch_name"
+    print_success "On branch: $branch_name"
+    
+    # Build the complete pipeline prompt
+    local target_path=$(get_target_path "$target")
+    
+    local full_prompt="# Development Pipeline Task
+
+## Task ID: ${task_id}
+## Requirement: ${requirement}
+## Target: ${target} (${target_path})
+
+## Project Structure
+- Frontend (Flutter): ${FRONTEND_PATH}
+- Backend (NestJS): ${BACKEND_PATH}
+- Frontend CLAUDE.md: ./CLAUDE.md  
+- Backend CLAUDE.md: ./server/CLAUDE.md
+
+---
+
+You will complete this task following a structured pipeline. Work through each stage in order, completing one before moving to the next.
+
+## Stage 1: Planning (use planner agent)
+- Read the CLAUDE.md for the target (./server/CLAUDE.md for backend)
+- Explore the existing codebase to understand patterns
+- Create a detailed implementation plan including:
+  - Files to create/modify
+  - Dependencies needed
+  - Step-by-step implementation order
+  - Test scenarios to cover
+- Tell me when planning is complete before moving on
+
+## Stage 2: Test-First Development (use tester agent)
+- Write failing tests based on your plan (TDD red phase)
+- For backend: create .spec.ts files in ./server/
+- For frontend: create test files in ./test/
+- Cover happy path, edge cases, and error conditions
+- Run tests to confirm they fail: \`cd server && npm test\` or \`flutter test\`
+- Tell me when tests are written before moving on
+
+## Stage 3: Implementation (use developer agent)  
+- Implement code to make tests pass (TDD green phase)
+- Follow existing patterns from CLAUDE.md
+- Run tests after each significant change
+- Run linter: \`cd server && npm run lint\` or \`flutter analyze\`
+- Tell me when implementation is complete
+
+## Stage 4: Refactoring (use developer agent)
+- Clean up code while keeping tests green
+- Extract duplication, improve naming
+- Verify tests still pass
+- Tell me when refactoring is complete
+
+## Stage 5: Code Review (use reviewer agent)
+- Review all changes with \`git diff\`
+- Check for: correctness, security, performance, patterns
+- Fix any issues found
+- Tell me the review results
+
+## Stage 6: Security Audit (use security-auditor agent)
+- Audit for vulnerabilities, especially around data handling
+- Run \`cd server && npm audit\` or check dependencies
+- Fix any critical/high issues
+- Tell me the security results
+
+## Stage 7: Documentation (use documenter agent)
+- Add JSDoc/dartdoc to new functions
+- Update README if needed
+- Update CHANGELOG.md with the changes
+- Tell me when documentation is complete
+
+## Stage 8: Finalization (use developer agent)
+- Run final tests: \`cd server && npm test\` or \`flutter test\`
+- Run final lint check
+- Stage changes: \`git add -A\`
+- Create commit with conventional format: \`git commit -m \"feat(scope): description\"\`
+- Show me the final status
+
+---
+
+Start with Stage 1: Planning. Read the relevant CLAUDE.md first, then explore the codebase and create your plan."
+
+    # Save prompt
+    local prompt_file="$LOG_DIR/${task_id}-full-pipeline-prompt.md"
+    echo "$full_prompt" > "$prompt_file"
+    log_info "Prompt saved to: $prompt_file"
+    
+    # Copy to clipboard
+    if copy_to_clipboard "$full_prompt"; then
+        echo -e "${GREEN}✓ Prompt copied to clipboard${NC}"
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}This runs all stages in ONE Claude session, maintaining context.${NC}"
+    echo -e "Prompt saved to: ${BLUE}$prompt_file${NC}"
+    echo ""
+    echo -e "${PURPLE}── Prompt Preview ──────────────────────────────────────────${NC}"
+    echo "$full_prompt" | head -30
+    echo -e "${YELLOW}... (see full prompt in clipboard or file)${NC}"
+    echo -e "${PURPLE}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    
+    read -p "$(echo -e ${CYAN}"Press Enter to launch Claude, 'p' to print full prompt: "${NC})" response
+    
+    if [[ "$response" == "p" ]]; then
+        echo "$full_prompt"
+        echo ""
+        read -p "$(echo -e ${CYAN}"Press Enter to launch Claude: "${NC})"
+    fi
+    
+    echo ""
+    echo -e "${GREEN}Launching Claude... Paste the prompt to begin the pipeline.${NC}"
+    echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+    
+    # Single claude session for entire pipeline
+    claude || true
+    
+    echo -e "${CYAN}────────────────────────────────────────────────────────────${NC}"
+    echo ""
+    
+    print_header "✅ Pipeline Session Complete"
+    echo -e "${GREEN}Task ID:${NC} $task_id"
+    echo -e "${GREEN}Branch:${NC}  $branch_name"
+    echo ""
+    echo -e "Next steps:"
+    echo -e "  1. Review: ${CYAN}git log --oneline -5${NC}"
+    echo -e "  2. Push:   ${CYAN}git push -u origin $branch_name${NC}"
+    echo -e "  3. PR:     ${CYAN}gh pr create${NC}"
+    
+    log_success "Single-session pipeline completed for task $task_id"
+    return 0
+}
+
+#-------------------------------------------------------------------------------
+# Full Pipeline Orchestration (Multi-Session with Context Passing)
 #-------------------------------------------------------------------------------
 
 run_full_pipeline() {
@@ -678,18 +931,21 @@ run_full_pipeline() {
     local task_id=$(generate_task_id)
     local branch_name="feature/${task_id}"
     
-    print_header "🚀 Starting Full Pipeline"
-    echo -e "${BLUE}Task ID:${NC} $task_id"
-    echo -e "${BLUE}Target:${NC} $target"
-    echo -e "${BLUE}Branch:${NC} $branch_name"
+    print_header "🚀 Starting Interactive Pipeline"
+    echo -e "${BLUE}Task ID:${NC}     $task_id"
+    echo -e "${BLUE}Target:${NC}      $target"
+    echo -e "${BLUE}Branch:${NC}      $branch_name"
     echo -e "${BLUE}Requirement:${NC} $requirement"
     echo ""
     echo -e "${BLUE}Project Structure:${NC}"
     echo -e "  Frontend (Flutter): $FRONTEND_PATH"
     echo -e "  Backend (NestJS):   $BACKEND_PATH"
     echo ""
+    print_warning "This is interactive mode - you will approve all file changes."
+    print_info "Each stage opens a Claude session. Complete it, then continue."
+    echo ""
     
-    log_info "Starting pipeline for task $task_id"
+    log_info "Starting interactive pipeline for task $task_id"
     
     # Ensure we're in project root
     cd "$PROJECT_ROOT"
@@ -697,84 +953,78 @@ run_full_pipeline() {
     # Create feature branch
     print_step "Creating feature branch..."
     git checkout -b "$branch_name" 2>/dev/null || git checkout "$branch_name"
+    print_success "On branch: $branch_name"
     
     # Stage 1: Planning
-    local plan_output
-    if ! plan_output=$(stage_plan "$requirement" "$task_id"); then
-        log_error "Pipeline failed at planning stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 1: Planning?"; then
+        save_state "planning" "paused" "$task_id"
+        return 0
     fi
+    stage_plan "$requirement" "$task_id"
     
     # Stage 2: Write tests first
-    local test_output
-    if ! test_output=$(stage_test_first "$plan_output" "$task_id" "$target"); then
-        log_error "Pipeline failed at test-first stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 2: Test-First Development?"; then
+        save_state "testing" "paused" "$task_id"
+        return 0
     fi
+    stage_test_first "$task_id" "$target"
     
     # Stage 3: Implementation
-    local impl_output
-    if ! impl_output=$(stage_implement "$plan_output" "$test_output" "$task_id" "$target"); then
-        log_error "Pipeline failed at implementation stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 3: Implementation?"; then
+        save_state "implementing" "paused" "$task_id"
+        return 0
     fi
+    stage_implement "$task_id" "$target"
     
     # Stage 4: Refactoring
-    if ! stage_refactor "$task_id" "$target"; then
-        log_error "Pipeline failed at refactoring stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 4: Refactoring?"; then
+        save_state "refactoring" "paused" "$task_id"
+        return 0
     fi
+    stage_refactor "$task_id" "$target"
     
     # Stage 5: Code Review
-    local review_output
-    if ! review_output=$(stage_review "$task_id" "$target"); then
-        log_error "Pipeline failed at review stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 5: Code Review?"; then
+        save_state "reviewing" "paused" "$task_id"
+        return 0
     fi
-    
-    # Check for critical issues
-    if grep -q '"severity": "CRITICAL"' "$review_output" 2>/dev/null; then
-        log_error "Critical issues found in review. Please address before continuing."
-        echo -e "${RED}Review the issues in: $review_output${NC}"
-        return 1
-    fi
+    stage_review "$task_id" "$target"
     
     # Stage 6: Security Audit
-    local security_output
-    if ! security_output=$(stage_security "$task_id" "$target"); then
-        log_warn "Security audit had issues - review recommended"
+    if ! wait_for_confirmation "Start Stage 6: Security Audit?"; then
+        save_state "security" "paused" "$task_id"
+        return 0
     fi
-    
-    # Check for critical security issues
-    if grep -q '"severity": "CRITICAL"' "$security_output" 2>/dev/null; then
-        log_error "Critical security issues found. Must address before continuing."
-        echo -e "${RED}Review the issues in: $security_output${NC}"
-        return 1
-    fi
+    stage_security "$task_id" "$target"
     
     # Stage 7: Documentation
-    if ! stage_document "$task_id" "$target"; then
-        log_warn "Documentation stage had issues - review recommended"
+    if ! wait_for_confirmation "Start Stage 7: Documentation?"; then
+        save_state "documenting" "paused" "$task_id"
+        return 0
     fi
+    stage_document "$task_id" "$target"
     
     # Stage 8: Finalization
-    if ! stage_finalize "$task_id" "$branch_name" "$target"; then
-        log_error "Pipeline failed at finalization stage"
-        return 1
+    if ! wait_for_confirmation "Start Stage 8: Finalization?"; then
+        save_state "finalizing" "paused" "$task_id"
+        return 0
     fi
+    stage_finalize "$task_id" "$branch_name" "$target"
     
     # Pipeline complete
     print_header "✅ Pipeline Complete"
     echo -e "${GREEN}Task ID:${NC} $task_id"
-    echo -e "${GREEN}Branch:${NC} $branch_name"
-    echo -e "${GREEN}Logs:${NC} $LOG_DIR/${task_id}-*.json"
+    echo -e "${GREEN}Branch:${NC}  $branch_name"
+    echo -e "${GREEN}Logs:${NC}    $LOG_DIR/${task_id}-*"
     echo ""
     echo -e "Next steps:"
-    echo -e "  1. Review changes: ${CYAN}git diff main${NC}"
-    echo -e "  2. Push branch: ${CYAN}git push -u origin $branch_name${NC}"
-    echo -e "  3. Create PR: ${CYAN}gh pr create${NC}"
+    echo -e "  1. Review changes:  ${CYAN}git log --oneline -5${NC}"
+    echo -e "  2. Push branch:     ${CYAN}git push -u origin $branch_name${NC}"
+    echo -e "  3. Create PR:       ${CYAN}gh pr create${NC}"
+    echo ""
     
     log_success "Pipeline completed successfully for task $task_id"
+    save_state "completed" "success" "$task_id"
     return 0
 }
 
@@ -786,85 +1036,109 @@ run_stage() {
     local stage="$1"
     shift
     
+    local task_id="${1:-$(generate_task_id)}"
+    local target="${2:-backend}"
+    
     case "$stage" in
         plan)
             local requirement="$1"
-            local task_id="${2:-$(generate_task_id)}"
+            task_id="${2:-$(generate_task_id)}"
             stage_plan "$requirement" "$task_id"
             ;;
         test)
-            local plan_file="$1"
-            local task_id="$2"
-            local target="${3:-backend}"
-            stage_test_first "$plan_file" "$task_id" "$target"
+            stage_test_first "$task_id" "$target"
             ;;
         implement)
-            local plan_file="$1"
-            local test_file="$2"
-            local task_id="$3"
-            local target="${4:-backend}"
-            stage_implement "$plan_file" "$test_file" "$task_id" "$target"
+            stage_implement "$task_id" "$target"
             ;;
         refactor)
-            local task_id="$1"
-            local target="${2:-backend}"
             stage_refactor "$task_id" "$target"
             ;;
         review)
-            local task_id="$1"
-            local target="${2:-all}"
             stage_review "$task_id" "$target"
             ;;
         security)
-            local task_id="$1"
-            local target="${2:-all}"
             stage_security "$task_id" "$target"
             ;;
         document)
-            local task_id="$1"
-            local target="${2:-all}"
             stage_document "$task_id" "$target"
             ;;
         finalize)
-            local task_id="$1"
-            local branch_name="$2"
-            local target="${3:-all}"
+            local branch_name="${3:-feature/$task_id}"
             stage_finalize "$task_id" "$branch_name" "$target"
             ;;
         *)
             echo "Unknown stage: $stage"
-            echo "Available stages: plan, test, implement, refactor, review, security, document, finalize"
+            echo "Available: plan, test, implement, refactor, review, security, document, finalize"
             return 1
             ;;
     esac
 }
 
 #-------------------------------------------------------------------------------
-# Quick Commands
+# Quick Commands (Interactive)
 #-------------------------------------------------------------------------------
 
 quick_review() {
     local target="${1:-all}"
+    local task_id=$(generate_task_id)
     print_header "Quick Code Review"
-    invoke_agent_interactive "reviewer" "Review all uncommitted changes. Focus on correctness, security, and code quality. Target: ${target}"
+    
+    local prompt="Review all uncommitted changes in the repository.
+    
+Target: ${target}
+
+Focus on:
+- Correctness and logic errors
+- Security issues
+- Code quality and patterns
+- Test coverage
+
+Use 'git diff' to see changes, then provide feedback and fix any issues."
+
+    invoke_agent_interactive "reviewer" "$prompt" "$task_id" "quick-review"
 }
 
 quick_test() {
     local target="${1:-all}"
+    local task_id=$(generate_task_id)
     print_header "Quick Test Generation"
-    invoke_agent_interactive "tester" "Generate tests for the most recently modified files. Target: ${target}"
+    
+    local prompt="Generate tests for recently modified files.
+
+Target: ${target}
+
+Use 'git diff --name-only' to find changed files, then write appropriate tests for them."
+
+    invoke_agent_interactive "tester" "$prompt" "$task_id" "quick-test"
 }
 
 quick_document() {
     local target="${1:-all}"
+    local task_id=$(generate_task_id)
     print_header "Quick Documentation Update"
-    invoke_agent_interactive "documenter" "Update documentation for all uncommitted changes. Target: ${target}"
+    
+    local prompt="Update documentation for all uncommitted changes.
+
+Target: ${target}
+
+Use 'git diff' to see what changed, then update relevant documentation."
+
+    invoke_agent_interactive "documenter" "$prompt" "$task_id" "quick-document"
 }
 
 quick_security() {
     local target="${1:-all}"
+    local task_id=$(generate_task_id)
     print_header "Quick Security Check"
-    invoke_agent_interactive "security-auditor" "Perform a security audit on all uncommitted changes. Target: ${target}"
+    
+    local prompt="Perform a security audit on all uncommitted changes.
+
+Target: ${target}
+
+Check for vulnerabilities, improper data handling, and security best practices."
+
+    invoke_agent_interactive "security-auditor" "$prompt" "$task_id" "quick-security"
 }
 
 quick_lint() {
@@ -885,7 +1159,7 @@ quick_test_run() {
 
 show_usage() {
     cat << EOF
-${PURPLE}Mystasis Multi-Agent Development Pipeline${NC}
+${PURPLE}Mystasis Multi-Agent Development Pipeline (Interactive Mode)${NC}
 
 ${CYAN}Project Structure:${NC}
   Frontend (Flutter): ./
@@ -895,77 +1169,70 @@ ${CYAN}Usage:${NC}
   ./scripts/pipeline.sh <command> [options]
 
 ${CYAN}Commands:${NC}
-  ${GREEN}full${NC} "<requirement>" [target]
-      Run the complete pipeline for a feature requirement
+  ${GREEN}full${NC} "<requirement>" [target]    ${YELLOW}(Recommended)${NC}
+      Run complete pipeline in ONE Claude session
+      Context is maintained - Claude remembers all previous stages
       target: backend (default) | frontend | fullstack
 
-  ${GREEN}stage${NC} <stage-name> [options]
-      Run a single pipeline stage
+  ${GREEN}multi${NC} "<requirement>" [target]
+      Run pipeline with SEPARATE Claude session per stage
+      You paste the prompt for each stage manually
+      Less context maintained between stages
+
+  ${GREEN}stage${NC} <stage-name> [task-id] [target]
+      Run a single stage interactively
       Stages: plan, test, implement, refactor, review, security, document, finalize
 
   ${GREEN}quick${NC} <action> [target]
-      Quick actions for common tasks
+      Quick interactive actions
       Actions: review, test, document, security, lint, test-run
       target: backend | frontend | all (default)
 
   ${GREEN}resume${NC} <task-id>
-      Resume a failed or interrupted pipeline from last successful stage
+      Resume a paused multi-session pipeline
 
   ${GREEN}status${NC} [task-id]
-      Show status of current or specified task
+      Show pipeline status
 
   ${GREEN}help${NC}
-      Show this help message
+      Show this help
 
 ${CYAN}Examples:${NC}
-  # Run full pipeline for a backend feature
-  ./scripts/pipeline.sh full "Add endpoint to fetch biomarker trends by date range" backend
+  # Single-session pipeline (recommended)
+  ./scripts/pipeline.sh full "Add biomarker date filtering" backend
 
-  # Run full pipeline for frontend feature
-  ./scripts/pipeline.sh full "Create biomarker trend chart component" frontend
+  # Multi-session pipeline (separate sessions per stage)  
+  ./scripts/pipeline.sh multi "Create trend chart widget" frontend
 
-  # Run full pipeline for fullstack feature
-  ./scripts/pipeline.sh full "Implement patient notifications" fullstack
-
-  # Run only the planning stage
-  ./scripts/pipeline.sh stage plan "Implement patient notification system"
-
-  # Quick review of current changes (all)
-  ./scripts/pipeline.sh quick review
-
-  # Quick review of backend only
+  # Quick review
   ./scripts/pipeline.sh quick review backend
 
-  # Run tests
-  ./scripts/pipeline.sh quick test-run backend
-  ./scripts/pipeline.sh quick test-run frontend
-
-  # Check pipeline status
-  ./scripts/pipeline.sh status task-20240115-143022-a1b2c3d4
-
 ${CYAN}Pipeline Stages:${NC}
-  1. ${BLUE}plan${NC}      - Analyze requirements and create implementation plan
-  2. ${BLUE}test${NC}      - Write tests before implementation (TDD)
+  1. ${BLUE}plan${NC}      - Analyze requirements, create plan
+  2. ${BLUE}test${NC}      - Write tests first (TDD)
   3. ${BLUE}implement${NC} - Write code to pass tests
-  4. ${BLUE}refactor${NC}  - Clean up code while keeping tests green
-  5. ${BLUE}review${NC}    - Automated code review
+  4. ${BLUE}refactor${NC}  - Clean up code
+  5. ${BLUE}review${NC}    - Code review
   6. ${BLUE}security${NC}  - Security audit
   7. ${BLUE}document${NC}  - Update documentation
-  8. ${BLUE}finalize${NC}  - Commit and prepare PR
+  8. ${BLUE}finalize${NC}  - Commit changes
 
-${CYAN}Targets:${NC}
-  backend   - NestJS server in ./server/
-  frontend  - Flutter app in ./
-  fullstack - Both backend and frontend
-  all       - Alias for fullstack
+${CYAN}Single vs Multi Session:${NC}
+  ${GREEN}full/single${NC} - One Claude session for entire pipeline
+    ✓ Claude remembers what it did in previous stages
+    ✓ Better context, more coherent implementation
+    ✓ Fewer prompts to paste
+    
+  ${GREEN}multi${NC} - Separate Claude session per stage
+    ✓ Can pause/resume between stages
+    ✓ More control over each stage
+    ✗ Each stage starts fresh (no memory)
 
-${CYAN}Configuration:${NC}
-  Pipeline config: .pipeline/config.yaml
-  Pipeline logs:   .pipeline/logs/
-  Pipeline state:  .pipeline/state/
-  Agent definitions: .claude/agents/
-  Backend CLAUDE.md: ./server/CLAUDE.md
-  Frontend CLAUDE.md: ./CLAUDE.md
+${CYAN}Files:${NC}
+  Config:  .pipeline/config.yaml
+  Logs:    .pipeline/logs/
+  State:   .pipeline/state/
+  Agents:  .claude/agents/
 
 EOF
 }
@@ -974,7 +1241,6 @@ show_status() {
     local task_id="${1:-}"
     
     if [[ -z "$task_id" ]]; then
-        # Show all recent tasks
         print_header "Recent Pipeline Tasks"
         if ls "$STATE_DIR"/*.json 1>/dev/null 2>&1; then
             ls -lt "$STATE_DIR"/*.json 2>/dev/null | head -10 | while read -r line; do
@@ -983,20 +1249,28 @@ show_status() {
                 local state=$(cat "$file" 2>/dev/null)
                 local stage=$(echo "$state" | grep -o '"stage": "[^"]*"' | cut -d'"' -f4)
                 local status=$(echo "$state" | grep -o '"status": "[^"]*"' | cut -d'"' -f4)
-                echo -e "  ${BLUE}$task${NC}: $stage - $status"
+                
+                local status_color="${NC}"
+                case "$status" in
+                    completed|success) status_color="${GREEN}" ;;
+                    paused) status_color="${YELLOW}" ;;
+                    failed) status_color="${RED}" ;;
+                    in_progress) status_color="${CYAN}" ;;
+                esac
+                
+                echo -e "  ${BLUE}$task${NC}: $stage - ${status_color}${status}${NC}"
             done
         else
             echo "  No pipeline tasks found."
         fi
     else
-        # Show specific task
         local state_file="$STATE_DIR/${task_id}.json"
         if [[ -f "$state_file" ]]; then
-            print_header "Task Status: $task_id"
-            cat "$state_file"
+            print_header "Task: $task_id"
+            cat "$state_file" | python3 -m json.tool 2>/dev/null || cat "$state_file"
             echo ""
-            echo "Log files:"
-            ls -la "$LOG_DIR/${task_id}"*.json 2>/dev/null || echo "  No log files found"
+            echo "Prompt files:"
+            ls -la "$LOG_DIR/${task_id}"*.md 2>/dev/null || echo "  None found"
         else
             echo "Task not found: $task_id"
             return 1
@@ -1019,10 +1293,10 @@ resume_pipeline() {
     print_header "Resuming Pipeline: $task_id"
     echo "Last stage: $last_stage ($last_status)"
     
-    # Determine next stage
     local stages=("planning" "testing" "implementing" "refactoring" "reviewing" "security" "documenting" "finalizing")
-    local start_index=0
+    local stage_cmds=("plan" "test" "implement" "refactor" "review" "security" "document" "finalize")
     
+    local start_index=0
     for i in "${!stages[@]}"; do
         if [[ "${stages[$i]}" == "$last_stage" ]]; then
             if [[ "$last_status" == "completed" ]]; then
@@ -1035,14 +1309,23 @@ resume_pipeline() {
     done
     
     if [[ $start_index -ge ${#stages[@]} ]]; then
-        echo "Pipeline already completed!"
+        print_success "Pipeline already completed!"
         return 0
     fi
     
-    echo "Resuming from stage: ${stages[$start_index]}"
+    echo "Resuming from: ${stages[$start_index]}"
     echo ""
-    echo "To continue manually, run:"
-    echo "  ./scripts/pipeline.sh stage ${stages[$start_index]%ing} $task_id"
+    
+    # Run remaining stages
+    for ((i=start_index; i<${#stages[@]}; i++)); do
+        if ! wait_for_confirmation "Run stage: ${stage_cmds[$i]}?"; then
+            save_state "${stages[$i]}" "paused" "$task_id"
+            return 0
+        fi
+        run_stage "${stage_cmds[$i]}" "$task_id" "backend"
+    done
+    
+    print_success "Pipeline resumed and completed!"
 }
 
 #-------------------------------------------------------------------------------
@@ -1053,11 +1336,15 @@ main() {
     local command="${1:-help}"
     shift || true
     
-    # Ensure we're in project root
     cd "$PROJECT_ROOT"
     
     case "$command" in
-        full)
+        full|single)
+            # Recommended: single session maintains context
+            run_single_session_pipeline "$@"
+            ;;
+        multi)
+            # Multi-session: separate Claude session per stage
             run_full_pipeline "$@"
             ;;
         stage)
@@ -1073,7 +1360,7 @@ main() {
                 security) quick_security "$target" ;;
                 lint) quick_lint "$target" ;;
                 test-run) quick_test_run "$target" ;;
-                *) echo "Unknown quick action: $action" ;;
+                *) echo "Unknown action: $action" ;;
             esac
             ;;
         resume)

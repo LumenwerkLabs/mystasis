@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **CurrentUser Parameter Decorator** (`src/common/decorators/current-user.decorator.ts`)
+  - Extracts authenticated user from request object
+  - Works with JwtAuthGuard to access JWT payload
+  - Type-safe user extraction for controller method parameters
+
+- **UserPayload Interface** (`src/common/interfaces/user-payload.interface.ts`)
+  - Shared interface for JWT token payload structure
+  - Ensures consistency between JwtAuthGuard and controllers
+  - Documents JWT claims: `sub` (user ID), `email`, `role`, optional `firstName`/`lastName`
+
+- **LlmController** (`src/modules/llm/llm.controller.ts`)
+  - `POST /llm/summary/:userId` - Generate health summary (CLINICIAN only)
+    - Accepts `CreateSummaryDto` with `summaryType` enum
+    - Validates UUID format on `userId` parameter
+  - `GET /llm/nudge/:userId` - Get wellness nudge (PATIENT only, own data)
+    - Validates that patient can only access their own nudges
+    - Returns personalized wellness message with disclaimer
+  - Protected by `JwtAuthGuard` and `RolesGuard`
+
+- **CreateSummaryDto** (`src/modules/llm/dto/create-summary.dto.ts`)
+  - Request DTO for health summary generation
+  - Validates `summaryType` is valid `SummaryType` enum value
+  - Uses `class-validator` decorators (`@IsNotEmpty`, `@IsEnum`)
+
+- **LlmModule** (`src/modules/llm/llm.module.ts`)
+  - Wires together HttpModule, HealthDataModule, LlmService, LlmController
+  - Exports LlmService for use by other modules
+  - Uses custom HTTP_SERVICE_TOKEN for dependency injection
+
 - **Authentication & Authorization**
   - `JwtAuthGuard` (`src/common/guards/jwt-auth.guard.ts`)
     - JWT Bearer token authentication for protected routes
@@ -107,6 +136,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Composite index on (userId, type, timestamp) for efficient biomarker queries
 
 ### Security
+
+- **Global ValidationPipe** (`src/main.ts`)
+  - Enabled globally for automatic DTO validation
+  - `whitelist: true` - Strips unknown properties from request bodies
+  - `forbidNonWhitelisted: true` - Throws error on unknown properties
+  - `transform: true` - Auto-transforms payloads to DTO class instances
+
+- **ParseUUIDPipe Validation**
+  - Applied to route parameters (`userId`) in LlmController
+  - Validates that path parameters are valid UUID v4 format
+  - Returns 400 Bad Request for malformed UUIDs
 
 - Passwords hashed with bcrypt (10 salt rounds)
 - Passwords excluded from all API responses using type-safe helper

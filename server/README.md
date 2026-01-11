@@ -105,9 +105,74 @@ getAllPatients() {
 
 Available roles: `PATIENT`, `CLINICIAN`
 
+## Input Validation
+
+The API uses global validation with strict security settings:
+
+- **DTO Validation**: All request bodies are validated against DTOs using `class-validator`
+- **Whitelist Mode**: Unknown properties are automatically stripped from requests
+- **Strict Mode**: Requests with unknown properties return 400 Bad Request
+- **UUID Validation**: Route parameters (e.g., `userId`) are validated as UUID v4 format
+
+```typescript
+// Example: Invalid request body
+POST /llm/summary/user-123  // 400 - Invalid UUID format
+POST /llm/summary/valid-uuid { "invalidField": "value" }  // 400 - Unknown property
+```
+
 ## LLM Integration
 
 The LLM service generates health insights with strict medical safety constraints.
+
+### Endpoints
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| `POST` | `/llm/summary/:userId` | CLINICIAN | Generate health summary |
+| `GET` | `/llm/nudge/:userId` | PATIENT | Get wellness nudge (own data only) |
+
+### Generate Summary
+
+```bash
+# Request (CLINICIAN only)
+curl -X POST 'http://localhost:3000/llm/summary/user-uuid-here' \
+  -H 'Authorization: Bearer <token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"summaryType": "WEEKLY_SUMMARY"}'
+
+# Response
+{
+  "id": "summary-uuid",
+  "content": "Your biomarker trends show...",
+  "type": "WEEKLY_SUMMARY",
+  "generatedAt": "2024-01-15T10:30:00.000Z",
+  "disclaimer": "Discuss these findings with your healthcare provider.",
+  "structuredData": {
+    "flags": ["Elevated HRV variability"],
+    "recommendations": ["Consider sleep tracking"],
+    "questionsForDoctor": ["Ask about stress management"]
+  }
+}
+```
+
+**Summary Types:** `DAILY_RECAP`, `WEEKLY_SUMMARY`, `TREND_ANALYSIS`, `RISK_ASSESSMENT`, `WELLNESS_NUDGE`, `CLINICIAN_REPORT`
+
+### Get Wellness Nudge
+
+```bash
+# Request (PATIENT only, own userId)
+curl -X GET 'http://localhost:3000/llm/nudge/your-user-uuid' \
+  -H 'Authorization: Bearer <token>'
+
+# Response
+{
+  "id": "nudge-uuid",
+  "content": "Great progress on your activity this week!",
+  "type": "WELLNESS_NUDGE",
+  "generatedAt": "2024-01-15T10:30:00.000Z",
+  "disclaimer": "Discuss these findings with your healthcare provider."
+}
+```
 
 ### Features
 

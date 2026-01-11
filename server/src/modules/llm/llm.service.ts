@@ -16,7 +16,7 @@ import { HealthDataService } from '../health-data/health-data.service';
  * @description Matches the `@nestjs/axios` HttpService pattern. Use this token
  * when providing a custom HTTP service implementation for testing or customization.
  */
-const HTTP_SERVICE_TOKEN = 'HttpService';
+export const HTTP_SERVICE_TOKEN = 'HttpService';
 
 /**
  * LLM API response structure matching OpenAI-compatible endpoints.
@@ -41,7 +41,7 @@ interface LlmApiResponse {
  * @property disclaimer - Medical disclaimer (always included)
  * @property structuredData - Optional extracted flags, recommendations, and questions
  */
-interface SummaryResponseDto {
+export interface SummaryResponseDto {
   id: string;
   content: string;
   type: SummaryType;
@@ -63,7 +63,7 @@ interface SummaryResponseDto {
  * @property generatedAt - ISO 8601 timestamp of generation
  * @property disclaimer - Medical disclaimer (always included)
  */
-interface NudgeResponseDto {
+export interface NudgeResponseDto {
   id: string;
   content: string;
   type: SummaryType;
