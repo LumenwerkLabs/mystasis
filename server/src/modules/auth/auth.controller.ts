@@ -5,6 +5,7 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { Throttle } from '../../common/decorators/throttle.decorator';
 
 /**
  * AuthController - HTTP layer for authentication endpoints.
@@ -48,6 +49,10 @@ export class AuthController {
    * @throws {ConflictException} When email already exists (409)
    * @throws {BadRequestException} When validation fails (400)
    */
+  // Rate limit: 3 requests per hour (3600s)
+  // Stricter than login to prevent mass account creation attacks
+  // and reduce abuse vectors for spam/bot registrations
+  @Throttle(3, 3600)
   @Post('register')
   async register(
     @Body() dto: RegisterDto,
@@ -66,6 +71,10 @@ export class AuthController {
    *
    * @throws {UnauthorizedException} When credentials are invalid (401)
    */
+  // Rate limit: 5 requests per minute (60s)
+  // Prevents brute force password attacks while allowing
+  // reasonable retry attempts for users who mistype credentials
+  @Throttle(5, 60)
   @Post('login')
   async login(
     @Body() dto: LoginDto,

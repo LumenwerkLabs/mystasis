@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRole, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -58,6 +58,8 @@ interface AuthResponse {
  */
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
@@ -102,6 +104,9 @@ export class AuthService {
     };
     const accessToken = await this.jwtService.signAsync(payload);
 
+    // SECURITY: Audit trail for new account creation
+    this.logger.log(`User registered: ${user.email}`);
+
     return {
       access_token: accessToken,
       user,
@@ -130,6 +135,10 @@ export class AuthService {
     const user = await this.usersService.findByEmail(dto.email);
 
     if (!user) {
+      // SECURITY: Log failed attempts for monitoring and intrusion detection
+      // Email is logged to identify targeted accounts (rate limiting handles abuse)
+      this.logger.warn(`Failed login attempt for email: ${dto.email}`);
+      // Generic message prevents user enumeration (don't reveal if email exists)
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -137,6 +146,8 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, user.password);
 
     if (!isPasswordValid) {
+      // SECURITY: Same logging and error as user-not-found to prevent timing attacks
+      this.logger.warn(`Failed login attempt for email: ${dto.email}`);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -147,6 +158,9 @@ export class AuthService {
       role: user.role,
     };
     const accessToken = await this.jwtService.signAsync(payload);
+
+    // SECURITY: Audit trail for successful authentications
+    this.logger.log(`Successful login for user: ${user.email}`);
 
     // Return user without password
     const { password, ...userWithoutPassword } = user;

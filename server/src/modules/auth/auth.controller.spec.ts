@@ -4,6 +4,11 @@ import { Reflector } from '@nestjs/core';
 import { UserRole, User } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
+// Throttler metadata keys - using string constants to avoid dependency on @nestjs/throttler
+// These match the keys used by the @Throttle decorator
+const THROTTLER_LIMIT = 'THROTTLER:LIMIT';
+const THROTTLER_TTL = 'THROTTLER:TTL';
+
 /**
  * TDD Tests for AuthController
  *
@@ -515,6 +520,101 @@ describe('AuthController', () => {
       if (controller) {
         expect(typeof controller.getProfile).toBe('function');
       }
+    });
+  });
+
+  // ============================================
+  // RATE LIMITING / THROTTLE DECORATOR TESTS
+  // ============================================
+
+  describe('rate limiting decorators', () => {
+    describe('login endpoint throttling', () => {
+      it('should have @Throttle decorator with 5 requests per minute limit', () => {
+        if (!AuthController) return;
+
+        // Get throttle metadata from the login method
+        const limit = Reflect.getMetadata(
+          THROTTLER_LIMIT,
+          AuthController.prototype.login,
+        );
+        const ttl = Reflect.getMetadata(
+          THROTTLER_TTL,
+          AuthController.prototype.login,
+        );
+
+        // Assert - login should be limited to 5 requests per minute (60 seconds)
+        expect(limit).toBe(5);
+        expect(ttl).toBe(60);
+      });
+
+      it('should have rate limiting more restrictive than default', () => {
+        if (!AuthController) return;
+
+        const limit = Reflect.getMetadata(
+          THROTTLER_LIMIT,
+          AuthController.prototype.login,
+        );
+
+        // Login should have stricter limit than typical endpoints
+        expect(limit).toBeDefined();
+        expect(limit).toBeLessThanOrEqual(10);
+      });
+    });
+
+    describe('register endpoint throttling', () => {
+      it('should have @Throttle decorator with 3 requests per hour limit', () => {
+        if (!AuthController) return;
+
+        // Get throttle metadata from the register method
+        const limit = Reflect.getMetadata(
+          THROTTLER_LIMIT,
+          AuthController.prototype.register,
+        );
+        const ttl = Reflect.getMetadata(
+          THROTTLER_TTL,
+          AuthController.prototype.register,
+        );
+
+        // Assert - register should be limited to 3 requests per hour (3600 seconds)
+        expect(limit).toBe(3);
+        expect(ttl).toBe(3600);
+      });
+
+      it('should have rate limiting stricter than login endpoint', () => {
+        if (!AuthController) return;
+
+        const registerLimit = Reflect.getMetadata(
+          THROTTLER_LIMIT,
+          AuthController.prototype.register,
+        );
+        const loginLimit = Reflect.getMetadata(
+          THROTTLER_LIMIT,
+          AuthController.prototype.login,
+        );
+
+        // Register should have stricter limit than login
+        expect(registerLimit).toBeDefined();
+        expect(loginLimit).toBeDefined();
+        expect(registerLimit).toBeLessThan(loginLimit);
+      });
+
+      it('should have longer TTL window than login endpoint', () => {
+        if (!AuthController) return;
+
+        const registerTtl = Reflect.getMetadata(
+          THROTTLER_TTL,
+          AuthController.prototype.register,
+        );
+        const loginTtl = Reflect.getMetadata(
+          THROTTLER_TTL,
+          AuthController.prototype.login,
+        );
+
+        // Register should have longer window (hourly vs per-minute)
+        expect(registerTtl).toBeDefined();
+        expect(loginTtl).toBeDefined();
+        expect(registerTtl).toBeGreaterThan(loginTtl);
+      });
     });
   });
 

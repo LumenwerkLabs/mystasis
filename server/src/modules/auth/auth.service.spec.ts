@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { UserRole, User } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import * as bcrypt from 'bcrypt';
@@ -37,6 +41,14 @@ interface MockJwtService {
   signAsync: jest.Mock;
 }
 
+interface MockLogger {
+  log: jest.Mock;
+  warn: jest.Mock;
+  error: jest.Mock;
+  debug: jest.Mock;
+  verbose: jest.Mock;
+}
+
 // Type for user without password
 type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -65,6 +77,9 @@ describe('AuthService', () => {
   };
   let mockUsersService: MockUsersService;
   let mockJwtService: MockJwtService;
+  // mockLogger is kept for potential future use in testing but currently
+  // the tests use Logger.prototype spies instead of injecting this mock
+  let _mockLogger: MockLogger;
 
   // Mock user data
   const mockUser: User = {
@@ -101,6 +116,15 @@ describe('AuthService', () => {
       sign: jest.fn(),
       signAsync: jest.fn(),
     };
+
+    _mockLogger = {
+      log: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      verbose: jest.fn(),
+    };
+    void _mockLogger; // Intentionally unused - kept for potential future mock injection
 
     jest.clearAllMocks();
 
@@ -553,6 +577,210 @@ describe('AuthService', () => {
           role: expect.any(String),
         }),
       );
+    });
+  });
+
+  // ============================================
+  // SECURITY LOGGING TESTS
+  // ============================================
+
+  describe('security logging', () => {
+    // Note: These tests require the AuthService to use NestJS Logger
+    // and log security-relevant events for audit purposes
+
+    describe('login logging', () => {
+      it('should log successful login with user email', async () => {
+        // Arrange
+        mockUsersService.findByEmail.mockResolvedValue(mockUser);
+        mockJwtService.signAsync.mockResolvedValue(mockJwtToken);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        // Spy on Logger prototype to capture log calls
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+
+        // Act
+        await service.login({
+          email: 'test@example.com',
+          password: 'correctPassword123!',
+        });
+
+        // Assert - should log successful login
+        expect(logSpy).toHaveBeenCalledWith(
+          expect.stringContaining('test@example.com'),
+        );
+        expect(logSpy).toHaveBeenCalledWith(
+          expect.stringMatching(/login|success|authenticated/i),
+        );
+
+        logSpy.mockRestore();
+      });
+
+      it('should log failed login attempt due to wrong password', async () => {
+        // Arrange
+        mockUsersService.findByEmail.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        // Spy on Logger prototype to capture warn calls
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+
+        // Act
+        try {
+          await service.login({
+            email: 'test@example.com',
+            password: 'wrongPassword',
+          });
+        } catch {
+          // Expected to throw
+        }
+
+        // Assert - should log failed login attempt
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('test@example.com'),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringMatching(/failed|invalid|password/i),
+        );
+
+        warnSpy.mockRestore();
+      });
+
+      it('should log failed login attempt due to user not found', async () => {
+        // Arrange
+        mockUsersService.findByEmail.mockResolvedValue(null);
+
+        // Spy on Logger prototype to capture warn calls
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+
+        // Act
+        try {
+          await service.login({
+            email: 'nonexistent@example.com',
+            password: 'anyPassword',
+          });
+        } catch {
+          // Expected to throw
+        }
+
+        // Assert - should log failed login attempt (user not found)
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('nonexistent@example.com'),
+        );
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringMatching(/failed|not found|invalid/i),
+        );
+
+        warnSpy.mockRestore();
+      });
+
+      it('should not log password in any log message', async () => {
+        // Arrange
+        mockUsersService.findByEmail.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        const testPassword = 'SuperSecretPassword123!';
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+        const errorSpy = jest.spyOn(Logger.prototype, 'error');
+
+        // Act
+        try {
+          await service.login({
+            email: 'test@example.com',
+            password: testPassword,
+          });
+        } catch {
+          // Expected to throw
+        }
+
+        // Assert - password should never appear in logs
+        const allLogCalls = [
+          ...logSpy.mock.calls,
+          ...warnSpy.mock.calls,
+          ...errorSpy.mock.calls,
+        ].flat();
+
+        allLogCalls.forEach((logArg) => {
+          if (typeof logArg === 'string') {
+            expect(logArg).not.toContain(testPassword);
+          }
+        });
+
+        logSpy.mockRestore();
+        warnSpy.mockRestore();
+        errorSpy.mockRestore();
+      });
+    });
+
+    describe('registration logging', () => {
+      it('should log successful registration with user email', async () => {
+        // Arrange
+        const createdUser: UserWithoutPassword = {
+          id: 'new-user-uuid',
+          email: 'newuser@example.com',
+          firstName: 'Jane',
+          lastName: 'Smith',
+          role: UserRole.PATIENT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        mockUsersService.create.mockResolvedValue(createdUser);
+        mockJwtService.signAsync.mockResolvedValue(mockJwtToken);
+
+        // Spy on Logger prototype to capture log calls
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+
+        // Act
+        await service.register({
+          email: 'newuser@example.com',
+          password: 'SecurePassword123!',
+          firstName: 'Jane',
+          lastName: 'Smith',
+        });
+
+        // Assert - should log successful registration
+        expect(logSpy).toHaveBeenCalledWith(
+          expect.stringContaining('newuser@example.com'),
+        );
+        expect(logSpy).toHaveBeenCalledWith(
+          expect.stringMatching(/register|created|new user/i),
+        );
+
+        logSpy.mockRestore();
+      });
+
+      it('should not log password during registration', async () => {
+        // Arrange
+        const testPassword = 'MySecretRegistrationPassword!';
+        mockUsersService.create.mockResolvedValue(mockUserWithoutPassword);
+        mockJwtService.signAsync.mockResolvedValue(mockJwtToken);
+
+        const logSpy = jest.spyOn(Logger.prototype, 'log');
+        const warnSpy = jest.spyOn(Logger.prototype, 'warn');
+        const errorSpy = jest.spyOn(Logger.prototype, 'error');
+
+        // Act
+        await service.register({
+          email: 'test@example.com',
+          password: testPassword,
+        });
+
+        // Assert - password should never appear in logs
+        const allLogCalls = [
+          ...logSpy.mock.calls,
+          ...warnSpy.mock.calls,
+          ...errorSpy.mock.calls,
+        ].flat();
+
+        allLogCalls.forEach((logArg) => {
+          if (typeof logArg === 'string') {
+            expect(logArg).not.toContain(testPassword);
+          }
+        });
+
+        logSpy.mockRestore();
+        warnSpy.mockRestore();
+        errorSpy.mockRestore();
+      });
     });
   });
 });

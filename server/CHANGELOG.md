@@ -137,6 +137,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Rate Limiting** (`@nestjs/throttler`)
+  - Global rate limit: 10 requests per 60 seconds (default)
+  - Login endpoint: 5 requests per 60 seconds (prevents brute force attacks)
+  - Registration endpoint: 3 requests per hour (prevents mass account creation)
+  - Custom `@Throttle` decorator combines metadata for testing with runtime enforcement
+  - ThrottlerGuard enabled globally via APP_GUARD provider
+
+- **Helmet Middleware** (`src/main.ts`)
+  - Security headers enabled via `helmet()` middleware
+  - Protects against common web vulnerabilities (XSS, clickjacking, MIME sniffing)
+
+- **CORS Policy** (`src/main.ts`)
+  - Restrictive CORS configuration with explicit origin whitelist
+  - Production enforcement: CORS_ORIGIN environment variable required
+  - Allowed methods: GET, POST, PUT, DELETE, PATCH, OPTIONS
+  - Credentials enabled for cookie-based authentication
+
+- **Authentication Event Logging** (`src/modules/auth/auth.service.ts`)
+  - Failed login attempts logged with email for security monitoring
+  - Successful logins and registrations logged for audit trail
+  - Generic error messages to prevent user enumeration
+
 - **Global ValidationPipe** (`src/main.ts`)
   - Enabled globally for automatic DTO validation
   - `whitelist: true` - Strips unknown properties from request bodies
