@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AlertsController** (`src/modules/alerts/alerts.controller.ts`)
+  - 7 REST endpoints for managing health alerts
+  - `GET /alerts/:userId` - Get paginated alerts with status/severity filtering
+  - `GET /alerts/:userId/active` - Get all active alerts for a user
+  - `GET /alerts/detail/:id` - Get a single alert by ID
+  - `POST /alerts` - Create a new alert (CLINICIAN only)
+  - `PATCH /alerts/:id/acknowledge` - Acknowledge an alert
+  - `PATCH /alerts/:id/dismiss` - Dismiss an alert
+  - `PATCH /alerts/:id/resolve` - Resolve an alert (CLINICIAN only)
+  - Role-based access control: PATIENT can access own alerts, CLINICIAN has full access
+  - Protected by `JwtAuthGuard` and `RolesGuard`
+  - 85 TDD test cases for comprehensive coverage
+
+- **CreateAlertDto** (`src/modules/alerts/dto/create-alert.dto.ts`)
+  - Request DTO for alert creation
+  - Validates userId (UUID), type (BiomarkerType), severity (AlertSeverity)
+  - Title (1-200 chars), message (1-2000 chars)
+  - Optional value and threshold fields (0-1,000,000)
+
+- **GetAlertsQueryDto** (`src/modules/alerts/dto/get-alerts-query.dto.ts`)
+  - Query parameters DTO for alert listing
+  - Optional status filter (AlertStatus enum)
+  - Optional severity filter (AlertSeverity enum)
+  - Pagination: page (default 1), limit (1-100, default 10)
+
 - **CurrentUser Parameter Decorator** (`src/common/decorators/current-user.decorator.ts`)
   - Extracts authenticated user from request object
   - Works with JwtAuthGuard to access JWT payload
