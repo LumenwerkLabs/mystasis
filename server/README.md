@@ -46,6 +46,7 @@ src/
     ├── users/                 # User management
     ├── health-data/           # Biomarker data
     ├── alerts/                # Health alerts
+    ├── analytics/             # Cohort analytics (CLINICIAN only)
     ├── llm/                   # LLM summaries and nudges
     └── health/                # Health checks
 ```
@@ -119,6 +120,48 @@ The API uses global validation with strict security settings:
 POST /llm/summary/user-123  // 400 - Invalid UUID format
 POST /llm/summary/valid-uuid { "invalidField": "value" }  // 400 - Unknown property
 ```
+
+## Analytics
+
+The analytics module provides population-level insights for clinicians to monitor patient cohorts.
+
+### Endpoints
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| `GET` | `/analytics/cohort/:clinicId/summary` | CLINICIAN | Get cohort summary statistics |
+| `GET` | `/analytics/cohort/:clinicId/risk-distribution` | CLINICIAN | Get patient risk distribution |
+| `GET` | `/analytics/cohort/:clinicId/alerts` | CLINICIAN | Get alert statistics |
+| `GET` | `/analytics/cohort/:clinicId/trends/:type` | CLINICIAN | Get population biomarker trends |
+
+### Example Request
+
+```bash
+# Get cohort summary (CLINICIAN only)
+curl -X GET 'http://localhost:3000/analytics/cohort/clinic-uuid/summary?startDate=2024-01-01&endDate=2024-01-31' \
+  -H 'Authorization: Bearer <token>'
+
+# Response
+{
+  "totalPatients": 150,
+  "activePatients": 120,
+  "patientsWithAlerts": 25,
+  "averageAge": 45.5,
+  "ageDistribution": {
+    "under30": 20,
+    "between30And50": 60,
+    "between50And70": 50,
+    "over70": 20
+  }
+}
+```
+
+### Privacy Protections
+
+- All data is aggregated at the population level
+- Individual patient data is never exposed
+- Sample sizes below 5 suppress min/max values to prevent re-identification
+- Date ranges limited to 365 days maximum
 
 ## LLM Integration
 

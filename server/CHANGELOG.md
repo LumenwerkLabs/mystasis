@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AnalyticsController** (`src/modules/analytics/analytics.controller.ts`)
+  - 4 REST endpoints for clinic-level cohort analytics
+  - `GET /analytics/cohort/:clinicId/summary` - Cohort summary statistics (patient counts, active patients, alerts)
+  - `GET /analytics/cohort/:clinicId/risk-distribution` - Patient risk level distribution (LOW, MEDIUM, HIGH, CRITICAL)
+  - `GET /analytics/cohort/:clinicId/alerts` - Alert statistics with status/severity breakdowns and average resolution time
+  - `GET /analytics/cohort/:clinicId/trends/:type` - Population biomarker trend analysis with daily data points
+  - CLINICIAN-only access control via `@Roles(UserRole.CLINICIAN)` decorator
+  - Protected by `JwtAuthGuard` and `RolesGuard`
+  - Date range filtering with validation (max 365 days)
+  - Privacy protections: aggregated data only, sample size suppression for min/max values below threshold (5)
+
+- **AnalyticsService** (`src/modules/analytics/analytics.service.ts`)
+  - Population-level data aggregation with privacy-preserving statistics
+  - Risk distribution calculation based on highest severity active alert per patient
+  - Alert statistics with status and severity breakdowns
+  - Average resolution time calculation for resolved alerts
+  - Biomarker trend analysis with daily aggregation and trend direction detection
+  - Sample size suppression to prevent re-identification (min/max hidden when n < 5)
+
+- **Analytics DTOs** (`src/modules/analytics/dto/`)
+  - `CohortSummaryDto` - Cohort statistics with age distribution
+  - `RiskDistributionDto` - Patient counts by risk level
+  - `AlertStatisticsDto` - Alert counts by status and severity
+  - `TrendSummaryDto` - Population biomarker trends with daily data points
+  - `GetAnalyticsQueryDto` - Query parameters with date range validation
+
 - **AlertsController** (`src/modules/alerts/alerts.controller.ts`)
   - 7 REST endpoints for managing health alerts
   - `GET /alerts/:userId` - Get paginated alerts with status/severity filtering
