@@ -1,4 +1,5 @@
 import { IsInt, Min } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Risk level enum for cohort analysis.
@@ -35,6 +36,12 @@ export class RiskDistributionDto {
    * Number of patients at LOW risk level.
    * These patients have biomarkers within normal ranges.
    */
+  @ApiProperty({
+    description:
+      'Number of patients at LOW risk level (biomarkers within normal ranges)',
+    example: 80,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   low: number;
@@ -43,6 +50,12 @@ export class RiskDistributionDto {
    * Number of patients at MEDIUM risk level.
    * These patients have some biomarkers outside optimal ranges.
    */
+  @ApiProperty({
+    description:
+      'Number of patients at MEDIUM risk level (some biomarkers outside optimal)',
+    example: 45,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   medium: number;
@@ -51,6 +64,12 @@ export class RiskDistributionDto {
    * Number of patients at HIGH risk level.
    * These patients have biomarkers that warrant attention.
    */
+  @ApiProperty({
+    description:
+      'Number of patients at HIGH risk level (biomarkers warrant attention)',
+    example: 20,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   high: number;
@@ -59,6 +78,12 @@ export class RiskDistributionDto {
    * Number of patients at CRITICAL risk level.
    * These patients require immediate clinical review.
    */
+  @ApiProperty({
+    description:
+      'Number of patients at CRITICAL risk level (require immediate review)',
+    example: 5,
+    minimum: 0,
+  })
   @IsInt()
   @Min(0)
   critical: number;

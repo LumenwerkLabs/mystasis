@@ -74,8 +74,8 @@ interface DateRangeOptions {
  * GET /analytics/cohort/clinic-uuid/trends/HEART_RATE?startDate=2024-01-01
  * ```
  */
-@ApiTags('analytics')
-@ApiBearerAuth()
+@ApiTags('Analytics')
+@ApiBearerAuth('JWT-auth')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnalyticsController {
