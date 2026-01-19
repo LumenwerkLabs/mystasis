@@ -83,6 +83,7 @@ describe('AuthController', () => {
     firstName: 'John',
     lastName: 'Doe',
     role: UserRole.PATIENT,
+    clinicId: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   };
@@ -207,6 +208,7 @@ describe('AuthController', () => {
             firstName: null,
             lastName: null,
             role: UserRole.PATIENT,
+            clinicId: null,
             createdAt: new Date(),
             updatedAt: new Date(),
           },

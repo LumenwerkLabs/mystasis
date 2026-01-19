@@ -3,6 +3,7 @@ import { HttpModule, HttpService } from '@nestjs/axios';
 import { LlmService, HTTP_SERVICE_TOKEN } from './llm.service';
 import { LlmController } from './llm.controller';
 import { HealthDataModule } from '../health-data/health-data.module';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * LLM module for health insights and wellness nudges.
@@ -24,7 +25,7 @@ import { HealthDataModule } from '../health-data/health-data.module';
  * - llm.model: LLM model identifier (e.g., 'gpt-4')
  */
 @Module({
-  imports: [HttpModule, HealthDataModule],
+  imports: [HttpModule, HealthDataModule, AuthModule],
   controllers: [LlmController],
   providers: [
     LlmService,

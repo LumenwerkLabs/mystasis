@@ -89,6 +89,7 @@ describe('AuthService', () => {
     firstName: 'John',
     lastName: 'Doe',
     role: UserRole.PATIENT,
+    clinicId: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   };
@@ -99,6 +100,7 @@ describe('AuthService', () => {
     firstName: mockUser.firstName,
     lastName: mockUser.lastName,
     role: mockUser.role,
+    clinicId: mockUser.clinicId,
     createdAt: mockUser.createdAt,
     updatedAt: mockUser.updatedAt,
   };
@@ -179,6 +181,7 @@ describe('AuthService', () => {
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
           role: UserRole.PATIENT, // Always PATIENT for new registrations
+          clinicId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -222,6 +225,7 @@ describe('AuthService', () => {
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
           role: UserRole.PATIENT,
+          clinicId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -269,6 +273,7 @@ describe('AuthService', () => {
           firstName: dtoWithoutRole.firstName,
           lastName: dtoWithoutRole.lastName,
           role: UserRole.PATIENT,
+          clinicId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
@@ -720,6 +725,7 @@ describe('AuthService', () => {
           firstName: 'Jane',
           lastName: 'Smith',
           role: UserRole.PATIENT,
+          clinicId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         };

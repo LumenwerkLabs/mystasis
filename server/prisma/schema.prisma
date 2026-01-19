@@ -18,15 +18,18 @@ model User {
   firstName String?
   lastName  String?
   role      UserRole @default(PATIENT)
+  clinicId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  clinic          Clinic?          @relation(fields: [clinicId], references: [id])
   biomarkerValues BiomarkerValue[]
   alerts          Alert[]
   summaries       LLMSummary[]
 
   @@index([email])
   @@index([role])
+  @@index([clinicId])
 }
 
 // Biomarker timeseries data
@@ -167,4 +170,18 @@ enum SummaryType {
   RISK_ASSESSMENT
   WELLNESS_NUDGE
   CLINICIAN_REPORT
+}
+
+// Clinic model for multi-tenancy
+model Clinic {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@index([name])
 }

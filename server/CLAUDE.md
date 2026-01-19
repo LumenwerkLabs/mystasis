@@ -56,6 +56,7 @@ server/
 │       ├── alerts/                # Health alerts from biomarker threshold violations
 │       ├── llm/                   # LLM summaries and nudges
 │       ├── analytics/             # Cohort-level insights for clinics
+│       ├── clinics/               # Clinic management and multi-tenancy
 │       └── health/                # Health checks (/health, /live, /ready)
 ├── test/                          # E2E tests
 ├── package.json
@@ -88,7 +89,8 @@ modules/[feature]/
 
 | Entity | Description |
 |--------|-------------|
-| `User` | Patient or clinician with email, hashed password, role, and profile data |
+| `User` | Patient or clinician with email, hashed password, role, clinicId, and profile data |
+| `Clinic` | Healthcare organization for multi-tenancy: name, address, phone; owns users |
 | `BiomarkerValue` | Timeseries entry: user, biomarker type, timestamp, value, unit, source, metadata |
 | `Alert` | Generated from threshold violations: type, severity, status, value vs threshold |
 | `LLMSummary` | Generated text (clinician vs patient facing) plus structured flags |
@@ -96,6 +98,13 @@ modules/[feature]/
 **User Roles (`UserRole` enum):**
 - `PATIENT` — sees simplified biomarker trends and behavior nudges
 - `CLINICIAN` — sees rich timelines, risk flags, and summarized reports
+
+**Multi-Tenancy (Clinic-based):**
+- Users belong to a `Clinic` via `clinicId` foreign key
+- Clinicians can only access patients enrolled in their clinic
+- Patients can only be enrolled in one clinic at a time
+- Analytics and cohort data are scoped to the clinician's clinic
+- Clinic ownership is validated on all sensitive operations
 
 **Alert Status Flow (`AlertStatus` enum):**
 - `ACTIVE` — Newly created, needs attention

@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Clinic Management with Multi-Tenancy**
+  - `Clinic` model added to database schema (`prisma/schema.prisma`)
+    - Fields: id (UUID), name, address, phone, timestamps
+    - One-to-many relationship with User (patients and clinicians belong to clinics)
+  - `clinicId` field added to User model for tenant isolation
+  - **ClinicsModule** (`src/modules/clinics/`)
+    - Full CRUD operations for clinic management
+    - Patient enrollment and unenrollment endpoints
+    - Clinic ownership validation for all sensitive operations
+  - **ClinicsController** (`src/modules/clinics/clinics.controller.ts`)
+    - `POST /clinics` - Create a new clinic (CLINICIAN only)
+    - `GET /clinics` - List clinician's own clinic (prevents enumeration)
+    - `GET /clinics/:id` - Get clinic by ID (owner only)
+    - `PATCH /clinics/:id` - Update clinic (owner only)
+    - `DELETE /clinics/:id` - Delete clinic (owner only)
+    - `POST /clinics/:clinicId/patients/:patientId` - Enroll patient (owner only)
+    - `DELETE /clinics/:clinicId/patients/:patientId` - Unenroll patient (owner only)
+    - `GET /clinics/:clinicId/patients` - List patients in clinic (owner only)
+  - **ClinicsService** (`src/modules/clinics/clinics.service.ts`)
+    - Clinic CRUD with ownership validation
+    - Patient enrollment with conflict detection (already enrolled elsewhere)
+    - Safe user responses (password excluded from all patient data)
+  - **Multi-tenant filtering** in analytics module
+    - Cohort analytics scoped to clinician's clinic
+    - Prevents cross-clinic data access
+  - **Clinic access validation** throughout the application
+    - Clinicians can only access their own clinic's data
+    - Patients can only be enrolled in one clinic at a time
+
 - **AnalyticsController** (`src/modules/analytics/analytics.controller.ts`)
   - 4 REST endpoints for clinic-level cohort analytics
   - `GET /analytics/cohort/:clinicId/summary` - Cohort summary statistics (patient counts, active patients, alerts)

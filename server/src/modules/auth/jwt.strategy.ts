@@ -12,6 +12,7 @@ interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  clinicId?: string;
   iat?: number;
   exp?: number;
 }
@@ -45,6 +46,9 @@ interface JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(private readonly configService: ConfigService) {
     const secret = configService.get<string>('auth.jwtSecret');
+    if (!secret) {
+      throw new Error('JWT secret is not configured');
+    }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -76,6 +80,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       id: payload.sub, // Alias for convenience
       email: payload.email,
       role: payload.role,
+      clinicId: payload.clinicId,
     };
   }
 }

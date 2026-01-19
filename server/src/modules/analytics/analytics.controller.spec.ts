@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { BiomarkerType, UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -106,6 +106,15 @@ interface MockAnalyticsService {
   getTrendSummary: jest.Mock<Promise<TrendSummaryResponse>>;
 }
 
+// Define user payload interface with clinicId
+interface UserPayload {
+  sub: string;
+  id: string;
+  email: string;
+  role: UserRole;
+  clinicId?: string;
+}
+
 describe('AnalyticsController', () => {
   // Controller and service will be imported dynamically
   let AnalyticsController: new (...args: unknown[]) => unknown;
@@ -113,23 +122,36 @@ describe('AnalyticsController', () => {
     getCohortSummary: (
       clinicId: string,
       query: GetAnalyticsQueryDto,
+      user: UserPayload,
     ) => Promise<CohortSummaryResponse>;
     getRiskDistribution: (
       clinicId: string,
+      user: UserPayload,
     ) => Promise<RiskDistributionResponse>;
     getAlertStatistics: (
       clinicId: string,
       query: GetAnalyticsQueryDto,
+      user: UserPayload,
     ) => Promise<AlertStatisticsResponse>;
     getTrendSummary: (
       clinicId: string,
       type: BiomarkerType,
       query: GetAnalyticsQueryDto,
+      user: UserPayload,
     ) => Promise<TrendSummaryResponse>;
   };
   let mockAnalyticsService: MockAnalyticsService;
 
   const mockClinicId = 'clinic-uuid-1';
+
+  // Mock clinician user with clinicId matching mockClinicId
+  const mockClinician: UserPayload = {
+    sub: 'clinician-uuid-1',
+    id: 'clinician-uuid-1',
+    email: 'clinician@example.com',
+    role: UserRole.CLINICIAN,
+    clinicId: mockClinicId,
+  };
 
   const mockCohortSummary: CohortSummaryResponse = {
     totalPatients: 150,
@@ -295,7 +317,7 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        await controller.getCohortSummary(mockClinicId, query);
+        await controller.getCohortSummary(mockClinicId, query, mockClinician);
 
         // Assert
         expect(mockAnalyticsService.getCohortSummary).toHaveBeenCalledWith(
@@ -312,7 +334,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockCohortSummary);
@@ -332,7 +358,7 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        await controller.getCohortSummary(mockClinicId, query);
+        await controller.getCohortSummary(mockClinicId, query, mockClinician);
 
         // Assert
         expect(mockAnalyticsService.getCohortSummary).toHaveBeenCalledWith(
@@ -352,7 +378,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result.totalPatients).toBe(0);
@@ -368,7 +398,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result.ageDistribution).toBeDefined();
@@ -444,7 +478,7 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getCohortSummary(mockClinicId, query),
+          controller.getCohortSummary(mockClinicId, query, mockClinician),
         ).rejects.toThrow('Database error');
       });
     });
@@ -459,10 +493,10 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getCohortSummary(mockClinicId, query),
+          controller.getCohortSummary(mockClinicId, query, mockClinician),
         ).rejects.toThrow(BadRequestException);
         await expect(
-          controller.getCohortSummary(mockClinicId, query),
+          controller.getCohortSummary(mockClinicId, query, mockClinician),
         ).rejects.toThrow('startDate must be before or equal to endDate');
       });
 
@@ -475,10 +509,10 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getCohortSummary(mockClinicId, query),
+          controller.getCohortSummary(mockClinicId, query, mockClinician),
         ).rejects.toThrow(BadRequestException);
         await expect(
-          controller.getCohortSummary(mockClinicId, query),
+          controller.getCohortSummary(mockClinicId, query, mockClinician),
         ).rejects.toThrow('Date range cannot exceed 365 days');
       });
 
@@ -493,7 +527,11 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockCohortSummary);
@@ -510,7 +548,11 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockCohortSummary);
@@ -526,7 +568,11 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockCohortSummary);
@@ -542,7 +588,11 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        const result = await controller.getCohortSummary(mockClinicId, query);
+        const result = await controller.getCohortSummary(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockCohortSummary);
@@ -563,7 +613,7 @@ describe('AnalyticsController', () => {
         );
 
         // Act
-        await controller.getRiskDistribution(mockClinicId);
+        await controller.getRiskDistribution(mockClinicId, mockClinician);
 
         // Assert
         expect(mockAnalyticsService.getRiskDistribution).toHaveBeenCalledWith(
@@ -578,7 +628,10 @@ describe('AnalyticsController', () => {
         );
 
         // Act
-        const result = await controller.getRiskDistribution(mockClinicId);
+        const result = await controller.getRiskDistribution(
+          mockClinicId,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockRiskDistribution);
@@ -591,7 +644,10 @@ describe('AnalyticsController', () => {
         );
 
         // Act
-        const result = await controller.getRiskDistribution(mockClinicId);
+        const result = await controller.getRiskDistribution(
+          mockClinicId,
+          mockClinician,
+        );
 
         // Assert
         expect(result.low).toBeDefined();
@@ -617,7 +673,10 @@ describe('AnalyticsController', () => {
         );
 
         // Act
-        const result = await controller.getRiskDistribution(mockClinicId);
+        const result = await controller.getRiskDistribution(
+          mockClinicId,
+          mockClinician,
+        );
 
         // Assert
         expect(result.low).toBe(0);
@@ -677,7 +736,7 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getRiskDistribution(mockClinicId),
+          controller.getRiskDistribution(mockClinicId, mockClinician),
         ).rejects.toThrow('Database error');
       });
     });
@@ -697,7 +756,7 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        await controller.getAlertStatistics(mockClinicId, query);
+        await controller.getAlertStatistics(mockClinicId, query, mockClinician);
 
         // Assert
         expect(mockAnalyticsService.getAlertStatistics).toHaveBeenCalledWith(
@@ -714,7 +773,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getAlertStatistics(mockClinicId, query);
+        const result = await controller.getAlertStatistics(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result).toEqual(mockAlertStatistics);
@@ -732,7 +795,7 @@ describe('AnalyticsController', () => {
         };
 
         // Act
-        await controller.getAlertStatistics(mockClinicId, query);
+        await controller.getAlertStatistics(mockClinicId, query, mockClinician);
 
         // Assert
         expect(mockAnalyticsService.getAlertStatistics).toHaveBeenCalledWith(
@@ -752,7 +815,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getAlertStatistics(mockClinicId, query);
+        const result = await controller.getAlertStatistics(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result.byStatus).toBeDefined();
@@ -770,7 +837,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getAlertStatistics(mockClinicId, query);
+        const result = await controller.getAlertStatistics(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result.bySeverity).toBeDefined();
@@ -788,7 +859,11 @@ describe('AnalyticsController', () => {
         const query: GetAnalyticsQueryDto = {};
 
         // Act
-        const result = await controller.getAlertStatistics(mockClinicId, query);
+        const result = await controller.getAlertStatistics(
+          mockClinicId,
+          query,
+          mockClinician,
+        );
 
         // Assert
         expect(result.averageResolutionTimeHours).toBeDefined();
@@ -847,7 +922,7 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getAlertStatistics(mockClinicId, query),
+          controller.getAlertStatistics(mockClinicId, query, mockClinician),
         ).rejects.toThrow('Database error');
       });
     });
@@ -871,6 +946,7 @@ describe('AnalyticsController', () => {
           mockClinicId,
           BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -891,8 +967,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -915,6 +992,7 @@ describe('AnalyticsController', () => {
           mockClinicId,
           BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -938,8 +1016,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -957,8 +1036,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -977,8 +1057,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -1005,6 +1086,7 @@ describe('AnalyticsController', () => {
           mockClinicId,
           BiomarkerType.GLUCOSE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -1028,8 +1110,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -1065,8 +1148,9 @@ describe('AnalyticsController', () => {
         // Act
         const result = await controller.getTrendSummary(
           mockClinicId,
-          'HEART_RATE',
+          BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -1109,6 +1193,7 @@ describe('AnalyticsController', () => {
           mockClinicId,
           BiomarkerType.HEART_RATE,
           query,
+          mockClinician,
         );
 
         // Assert
@@ -1183,7 +1268,12 @@ describe('AnalyticsController', () => {
 
         // Act & Assert
         await expect(
-          controller.getTrendSummary(mockClinicId, 'HEART_RATE', query),
+          controller.getTrendSummary(
+            mockClinicId,
+            BiomarkerType.HEART_RATE,
+            query,
+            mockClinician,
+          ),
         ).rejects.toThrow('Database error');
       });
     });
@@ -1299,6 +1389,335 @@ describe('AnalyticsController', () => {
         const requiredRoles = methodRoles || classRoles || [];
         expect(requiredRoles).toContain(UserRole.CLINICIAN);
         expect(requiredRoles).not.toContain(UserRole.PATIENT);
+      });
+    });
+  });
+
+  // ============================================
+  // CLINIC ACCESS VALIDATION TESTS (Multi-Tenancy)
+  // ============================================
+
+  describe('Clinic Access Validation (Multi-Tenancy)', () => {
+    // Define user payload interface with clinicId for these tests
+    interface UserPayloadWithClinic {
+      sub: string;
+      id: string;
+      email: string;
+      role: UserRole;
+      clinicId?: string;
+    }
+
+    const mockClinicianWithClinic: UserPayloadWithClinic = {
+      sub: 'clinician-uuid-1',
+      id: 'clinician-uuid-1',
+      email: 'clinician@example.com',
+      role: UserRole.CLINICIAN,
+      clinicId: 'clinic-uuid-1',
+    };
+
+    const mockClinicianDifferentClinic: UserPayloadWithClinic = {
+      sub: 'clinician-uuid-2',
+      id: 'clinician-uuid-2',
+      email: 'clinician2@example.com',
+      role: UserRole.CLINICIAN,
+      clinicId: 'clinic-uuid-2',
+    };
+
+    const mockClinicianWithoutClinic: UserPayloadWithClinic = {
+      sub: 'clinician-uuid-3',
+      id: 'clinician-uuid-3',
+      email: 'clinician3@example.com',
+      role: UserRole.CLINICIAN,
+      clinicId: undefined,
+    };
+
+    // Extended controller type with user parameter for clinic validation
+    let controllerWithClinicValidation: {
+      getCohortSummary: (
+        clinicId: string,
+        query: GetAnalyticsQueryDto,
+        user: UserPayloadWithClinic,
+      ) => Promise<CohortSummaryResponse>;
+      getRiskDistribution: (
+        clinicId: string,
+        user: UserPayloadWithClinic,
+      ) => Promise<RiskDistributionResponse>;
+      getAlertStatistics: (
+        clinicId: string,
+        query: GetAnalyticsQueryDto,
+        user: UserPayloadWithClinic,
+      ) => Promise<AlertStatisticsResponse>;
+      getTrendSummary: (
+        clinicId: string,
+        type: BiomarkerType,
+        query: GetAnalyticsQueryDto,
+        user: UserPayloadWithClinic,
+      ) => Promise<TrendSummaryResponse>;
+    };
+
+    beforeEach(() => {
+      // Cast controller for tests that need user parameter
+      controllerWithClinicValidation =
+        controller as typeof controllerWithClinicValidation;
+    });
+
+    describe('getCohortSummary clinic access', () => {
+      it('should allow clinician to access their own clinic analytics', async () => {
+        // Arrange
+        mockAnalyticsService.getCohortSummary.mockResolvedValue(
+          mockCohortSummary,
+        );
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act
+        const result = await controllerWithClinicValidation.getCohortSummary(
+          'clinic-uuid-1',
+          query,
+          mockClinicianWithClinic,
+        );
+
+        // Assert
+        expect(result).toEqual(mockCohortSummary);
+        expect(mockAnalyticsService.getCohortSummary).toHaveBeenCalledWith(
+          'clinic-uuid-1',
+          expect.any(Object),
+        );
+      });
+
+      it('should throw ForbiddenException when clinician tries to access another clinic analytics', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getCohortSummary(
+            'clinic-uuid-1', // Trying to access clinic-uuid-1
+            query,
+            mockClinicianDifferentClinic, // But belongs to clinic-uuid-2
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('should not call service when clinic access is denied', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act
+        try {
+          await controllerWithClinicValidation.getCohortSummary(
+            'clinic-uuid-1',
+            query,
+            mockClinicianDifferentClinic,
+          );
+        } catch {
+          // Expected to throw
+        }
+
+        // Assert
+        expect(mockAnalyticsService.getCohortSummary).not.toHaveBeenCalled();
+      });
+
+      it('should throw ForbiddenException when clinician has no clinicId', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getCohortSummary(
+            'clinic-uuid-1',
+            query,
+            mockClinicianWithoutClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+    });
+
+    describe('getRiskDistribution clinic access', () => {
+      it('should allow clinician to access their own clinic risk distribution', async () => {
+        // Arrange
+        mockAnalyticsService.getRiskDistribution.mockResolvedValue(
+          mockRiskDistribution,
+        );
+
+        // Act
+        const result = await controllerWithClinicValidation.getRiskDistribution(
+          'clinic-uuid-1',
+          mockClinicianWithClinic,
+        );
+
+        // Assert
+        expect(result).toEqual(mockRiskDistribution);
+        expect(mockAnalyticsService.getRiskDistribution).toHaveBeenCalledWith(
+          'clinic-uuid-1',
+        );
+      });
+
+      it('should throw ForbiddenException when clinician tries to access another clinic risk distribution', async () => {
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getRiskDistribution(
+            'clinic-uuid-1',
+            mockClinicianDifferentClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('should throw ForbiddenException when clinician has no clinicId', async () => {
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getRiskDistribution(
+            'clinic-uuid-1',
+            mockClinicianWithoutClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+    });
+
+    describe('getAlertStatistics clinic access', () => {
+      it('should allow clinician to access their own clinic alert statistics', async () => {
+        // Arrange
+        mockAnalyticsService.getAlertStatistics.mockResolvedValue(
+          mockAlertStatistics,
+        );
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act
+        const result = await controllerWithClinicValidation.getAlertStatistics(
+          'clinic-uuid-1',
+          query,
+          mockClinicianWithClinic,
+        );
+
+        // Assert
+        expect(result).toEqual(mockAlertStatistics);
+        expect(mockAnalyticsService.getAlertStatistics).toHaveBeenCalledWith(
+          'clinic-uuid-1',
+          expect.any(Object),
+        );
+      });
+
+      it('should throw ForbiddenException when clinician tries to access another clinic alert statistics', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getAlertStatistics(
+            'clinic-uuid-1',
+            query,
+            mockClinicianDifferentClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('should throw ForbiddenException when clinician has no clinicId', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getAlertStatistics(
+            'clinic-uuid-1',
+            query,
+            mockClinicianWithoutClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+    });
+
+    describe('getTrendSummary clinic access', () => {
+      it('should allow clinician to access their own clinic trend summary', async () => {
+        // Arrange
+        mockAnalyticsService.getTrendSummary.mockResolvedValue(
+          mockTrendSummary,
+        );
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act
+        const result = await controllerWithClinicValidation.getTrendSummary(
+          'clinic-uuid-1',
+          BiomarkerType.HEART_RATE,
+          query,
+          mockClinicianWithClinic,
+        );
+
+        // Assert
+        expect(result).toEqual(mockTrendSummary);
+        expect(mockAnalyticsService.getTrendSummary).toHaveBeenCalledWith(
+          'clinic-uuid-1',
+          BiomarkerType.HEART_RATE,
+          expect.any(Object),
+        );
+      });
+
+      it('should throw ForbiddenException when clinician tries to access another clinic trend summary', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getTrendSummary(
+            'clinic-uuid-1',
+            BiomarkerType.HEART_RATE,
+            query,
+            mockClinicianDifferentClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+
+      it('should throw ForbiddenException when clinician has no clinicId', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        await expect(
+          controllerWithClinicValidation.getTrendSummary(
+            'clinic-uuid-1',
+            BiomarkerType.HEART_RATE,
+            query,
+            mockClinicianWithoutClinic,
+          ),
+        ).rejects.toThrow(ForbiddenException);
+      });
+    });
+
+    describe('error messages', () => {
+      it('should provide appropriate error message when clinician accesses wrong clinic', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        try {
+          await controllerWithClinicValidation.getCohortSummary(
+            'clinic-uuid-1',
+            query,
+            mockClinicianDifferentClinic,
+          );
+          throw new Error('Expected ForbiddenException to be thrown');
+        } catch (error) {
+          expect((error as Error).message).toMatch(
+            /not authorized|access denied|forbidden/i,
+          );
+        }
+      });
+
+      it('should provide appropriate error message when clinician has no clinic assigned', async () => {
+        // Arrange
+        const query: GetAnalyticsQueryDto = {};
+
+        // Act & Assert
+        try {
+          await controllerWithClinicValidation.getCohortSummary(
+            'clinic-uuid-1',
+            query,
+            mockClinicianWithoutClinic,
+          );
+          throw new Error('Expected ForbiddenException to be thrown');
+        } catch (error) {
+          expect((error as Error).message).toMatch(
+            /not assigned|no clinic|forbidden/i,
+          );
+        }
       });
     });
   });

@@ -98,10 +98,9 @@ const BIOMARKER_UNITS: Record<BiomarkerType, string> = {
  * - Resolution time is calculated as the difference between alert creation and update time
  *
  * @remarks
- * Currently the User model does not have a clinicId field, so
- * analytics aggregate all patients. The clinicId parameter is accepted
- * for API consistency and will be used for filtering once the schema
- * is updated to support clinic associations.
+ * All analytics methods filter data by clinicId to ensure clinic-level
+ * isolation. Only patients belonging to the specified clinic are included
+ * in the aggregations.
  *
  * @example
  * // Get cohort summary for a clinic
@@ -206,12 +205,12 @@ export class AnalyticsService {
   /**
    * Get cohort summary statistics for a clinic.
    *
-   * @param clinicId - UUID of the clinic (reserved for future use)
+   * @param clinicId - UUID of the clinic to analyze
    * @param options - Date range options
    * @returns Cohort summary with patient counts and demographics
    *
    * @description
-   * Returns aggregated patient statistics including:
+   * Returns aggregated patient statistics for patients in the specified clinic, including:
    * - Total patient count
    * - Active patients (those with biomarker data in the date range)
    * - Patients with active alerts
@@ -221,12 +220,9 @@ export class AnalyticsService {
     clinicId: string,
     options?: DateRangeOptions,
   ): Promise<CohortSummaryDto> {
-    // Note: clinicId is accepted but not used until User model has clinicId field
-    void clinicId;
-
-    // Count total patients
+    // Count total patients in this clinic
     const totalPatients = await this.prisma.user.count({
-      where: { role: UserRole.PATIENT },
+      where: { role: UserRole.PATIENT, clinicId },
     });
 
     // Build date filter for biomarker activity
@@ -237,15 +233,21 @@ export class AnalyticsService {
 
     // Count active patients (those with biomarker data in the date range)
     const activePatientIds = await this.prisma.biomarkerValue.findMany({
-      where: dateFilter,
+      where: {
+        ...dateFilter,
+        user: { clinicId },
+      },
       select: { userId: true },
       distinct: ['userId'],
     });
     const activePatients = activePatientIds.length;
 
-    // Count patients with active alerts
+    // Count patients with active alerts in this clinic
     const patientsWithAlertsIds = await this.prisma.alert.findMany({
-      where: { status: AlertStatus.ACTIVE },
+      where: {
+        status: AlertStatus.ACTIVE,
+        user: { clinicId },
+      },
       select: { userId: true },
       distinct: ['userId'],
     });
@@ -270,20 +272,18 @@ export class AnalyticsService {
   /**
    * Get risk distribution across the clinic's patient cohort.
    *
-   * @param clinicId - UUID of the clinic (reserved for future use)
+   * @param clinicId - UUID of the clinic to analyze
    * @returns Risk distribution by level
    *
    * @description
-   * Calculates patient risk levels based on their highest severity active alert.
-   * Patients without active alerts are considered LOW risk.
+   * Calculates patient risk levels for patients in the specified clinic based
+   * on their highest severity active alert. Patients without active alerts
+   * are considered LOW risk.
    */
   async getRiskDistribution(clinicId: string): Promise<RiskDistributionDto> {
-    // Note: clinicId is accepted but not used until User model has clinicId field
-    void clinicId;
-
-    // Get all patients
+    // Get all patients in this clinic
     const allPatients = await this.prisma.user.findMany({
-      where: { role: UserRole.PATIENT },
+      where: { role: UserRole.PATIENT, clinicId },
       select: { id: true },
     });
 
@@ -296,10 +296,14 @@ export class AnalyticsService {
       };
     }
 
-    // Get the highest severity active alert for each patient
+    // Get the highest severity active alert for each patient in this clinic
+    // Security: Filter by clinic to prevent cross-tenant data leakage
     const alertsByPatient = await this.prisma.alert.groupBy({
       by: ['userId'],
-      where: { status: AlertStatus.ACTIVE },
+      where: {
+        status: AlertStatus.ACTIVE,
+        user: { clinicId },
+      },
       _max: { severity: true },
     });
 
@@ -350,12 +354,13 @@ export class AnalyticsService {
   /**
    * Get alert statistics for a clinic.
    *
-   * @param clinicId - UUID of the clinic (reserved for future use)
+   * @param clinicId - UUID of the clinic to analyze
    * @param options - Date range options
    * @returns Alert statistics with breakdowns
    *
    * @description
-   * Returns aggregated alert statistics including:
+   * Returns aggregated alert statistics for alerts belonging to patients in
+   * the specified clinic, including:
    * - Total alert count
    * - Breakdown by status (ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED)
    * - Breakdown by severity (LOW, MEDIUM, HIGH, CRITICAL)
@@ -365,24 +370,27 @@ export class AnalyticsService {
     clinicId: string,
     options?: DateRangeOptions,
   ): Promise<AlertStatisticsDto> {
-    // Note: clinicId is accepted but not used until User model has clinicId field
-    void clinicId;
-
     // Build date filter for alert creation time
     const dateFilter = this.buildDateFilter<Prisma.AlertWhereInput>(
       options,
       'createdAt',
     );
 
+    // Build clinic filter
+    const clinicFilter = { user: { clinicId } };
+
+    // Combine filters
+    const whereFilter = { ...dateFilter, ...clinicFilter };
+
     // Get total count
     const totalAlerts = await this.prisma.alert.count({
-      where: dateFilter,
+      where: whereFilter,
     });
 
     // Count by status
     const statusCounts = await this.prisma.alert.groupBy({
       by: ['status'],
-      where: dateFilter,
+      where: whereFilter,
       _count: { id: true },
     });
 
@@ -413,7 +421,7 @@ export class AnalyticsService {
     // Count by severity
     const severityCounts = await this.prisma.alert.groupBy({
       by: ['severity'],
-      where: dateFilter,
+      where: whereFilter,
       _count: { id: true },
     });
 
@@ -445,7 +453,7 @@ export class AnalyticsService {
     // Resolution time = updatedAt - createdAt for RESOLVED alerts
     const resolvedAlerts = await this.prisma.alert.findMany({
       where: {
-        ...dateFilter,
+        ...whereFilter,
         status: AlertStatus.RESOLVED,
       },
       select: {
@@ -489,13 +497,13 @@ export class AnalyticsService {
   /**
    * Get population biomarker trend summary for a clinic.
    *
-   * @param clinicId - UUID of the clinic (reserved for future use)
+   * @param clinicId - UUID of the clinic to analyze
    * @param biomarkerType - The type of biomarker to analyze
    * @param options - Date range options
    * @returns Trend summary with data points
    *
    * @description
-   * Returns aggregated biomarker trends including:
+   * Returns aggregated biomarker trends for patients in the specified clinic, including:
    * - Population-wide average, min, and max values
    * - Overall trend direction (increasing, decreasing, stable)
    * - Daily data points with statistics
@@ -505,10 +513,7 @@ export class AnalyticsService {
     biomarkerType: BiomarkerType,
     options?: DateRangeOptions,
   ): Promise<TrendSummaryDto> {
-    // Note: clinicId is accepted but not used until User model has clinicId field
-    void clinicId;
-
-    // Build date filter with biomarker type
+    // Build date filter with biomarker type and clinic filter
     const baseDateFilter =
       this.buildDateFilter<Prisma.BiomarkerValueWhereInput>(
         options,
@@ -516,6 +521,7 @@ export class AnalyticsService {
       );
     const dateFilter: Prisma.BiomarkerValueWhereInput = {
       type: biomarkerType,
+      user: { clinicId },
       ...baseDateFilter,
     };
 

@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
-import { JwtModule, JwtService } from '@nestjs/jwt';
+import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
-import { JWT_SERVICE } from '../../common/guards/jwt-auth.guard';
 
 /**
  * Authentication module for user registration, login, and JWT-based authentication.
@@ -41,24 +40,22 @@ import { JWT_SERVICE } from '../../common/guards/jwt-auth.guard';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('auth.jwtSecret'),
-        signOptions: {
-          expiresIn: configService.get<string>('auth.jwtExpiration') || '24h',
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('auth.jwtSecret');
+        if (!secret) {
+          throw new Error('JWT secret is not configured');
+        }
+        return {
+          secret,
+          signOptions: {
+            expiresIn: configService.get<number>('auth.jwtExpiration') || 86400, // 24 hours in seconds
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    {
-      provide: JWT_SERVICE,
-      useFactory: (jwtService: JwtService) => jwtService,
-      inject: [JwtService],
-    },
-  ],
-  exports: [AuthService, JwtModule],
+  providers: [AuthService, JwtStrategy],
+  exports: [AuthService, JwtModule, PassportModule],
 })
 export class AuthModule {}

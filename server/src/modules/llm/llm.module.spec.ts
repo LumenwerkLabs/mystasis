@@ -86,6 +86,10 @@ describe('LlmModule', () => {
                     apiKey: 'test-key',
                     model: 'gpt-4',
                   },
+                  auth: {
+                    jwtSecret: 'test-secret-key-for-testing-purposes-only',
+                    jwtExpiration: 86400,
+                  },
                 }),
               ],
             }),

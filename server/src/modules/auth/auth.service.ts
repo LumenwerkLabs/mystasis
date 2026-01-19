@@ -18,6 +18,7 @@ interface JwtPayload {
   sub: string;
   email: string;
   role: UserRole;
+  clinicId?: string;
 }
 
 /**
@@ -101,6 +102,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      clinicId: user.clinicId ?? undefined,
     };
     const accessToken = await this.jwtService.signAsync(payload);
 
@@ -156,6 +158,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       role: user.role,
+      clinicId: user.clinicId ?? undefined,
     };
     const accessToken = await this.jwtService.signAsync(payload);
 

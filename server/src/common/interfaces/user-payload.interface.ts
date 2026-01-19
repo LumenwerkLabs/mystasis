@@ -33,4 +33,6 @@ export interface UserPayload {
   firstName?: string;
   /** Optional last name */
   lastName?: string;
+  /** Optional clinic ID for multi-tenancy */
+  clinicId?: string;
 }

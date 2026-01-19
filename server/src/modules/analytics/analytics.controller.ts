@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   ParseEnumPipe,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,8 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { UserPayload } from '../../common/interfaces/user-payload.interface';
 
 /**
  * Date range options for analytics queries.
@@ -58,11 +61,6 @@ interface DateRangeOptions {
  * - `GET /analytics/cohort/:clinicId/alerts` - Alert statistics
  * - `GET /analytics/cohort/:clinicId/trends/:type` - Population biomarker trends
  *
- * @remarks
- * TODO: Add clinic access validation once User model has clinicId field.
- * Currently, any clinician can access any clinic's analytics.
- * Future implementation should verify that the requesting clinician
- * belongs to or has access to the specified clinic.
  *
  * @example
  * ```typescript
@@ -82,6 +80,26 @@ interface DateRangeOptions {
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
+
+  /**
+   * Validates that the current user has access to the specified clinic.
+   *
+   * @param clinicId - The clinic ID to validate access for
+   * @param user - The current user payload
+   * @throws {ForbiddenException} When user doesn't own the clinic
+   */
+  private validateClinicAccess(clinicId: string, user: UserPayload): void {
+    if (!user.clinicId) {
+      throw new ForbiddenException(
+        'Access forbidden: no clinic assigned to this user',
+      );
+    }
+    if (user.clinicId !== clinicId) {
+      throw new ForbiddenException(
+        'Access forbidden: not authorized to access this clinic',
+      );
+    }
+  }
 
   /**
    * Parses date range from query DTO into Date objects.
@@ -177,7 +195,9 @@ export class AnalyticsController {
   async getCohortSummary(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Query() query: GetAnalyticsQueryDto,
+    @CurrentUser() user: UserPayload,
   ): Promise<CohortSummaryDto> {
+    this.validateClinicAccess(clinicId, user);
     const dateRange = this.parseDateRange(query);
     return this.analyticsService.getCohortSummary(clinicId, dateRange);
   }
@@ -232,7 +252,9 @@ export class AnalyticsController {
   })
   async getRiskDistribution(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
+    @CurrentUser() user: UserPayload,
   ): Promise<RiskDistributionDto> {
+    this.validateClinicAccess(clinicId, user);
     return this.analyticsService.getRiskDistribution(clinicId);
   }
 
@@ -290,7 +312,9 @@ export class AnalyticsController {
   async getAlertStatistics(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Query() query: GetAnalyticsQueryDto,
+    @CurrentUser() user: UserPayload,
   ): Promise<AlertStatisticsDto> {
+    this.validateClinicAccess(clinicId, user);
     const dateRange = this.parseDateRange(query);
     return this.analyticsService.getAlertStatistics(clinicId, dateRange);
   }
@@ -360,7 +384,9 @@ export class AnalyticsController {
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Param('type', new ParseEnumPipe(BiomarkerType)) type: BiomarkerType,
     @Query() query: GetAnalyticsQueryDto,
+    @CurrentUser() user: UserPayload,
   ): Promise<TrendSummaryDto> {
+    this.validateClinicAccess(clinicId, user);
     const dateRange = this.parseDateRange(query);
     return this.analyticsService.getTrendSummary(clinicId, type, dateRange);
   }
