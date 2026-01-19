@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Users Controller** (`src/modules/users/users.controller.ts`)
+  - REST endpoints for user profile management with role-based access control
+  - `GET /users` - List users in clinic (CLINICIAN only, paginated)
+  - `GET /users/:id` - Get user profile by ID
+  - `PATCH /users/:id` - Update user profile
+  - `DELETE /users/:id` - Delete user account
+  - Access control:
+    - PATIENT: can only access their own profile
+    - CLINICIAN: can access patients in their clinic
+  - Protected by `JwtAuthGuard` and `RolesGuard`
+  - Full Swagger/OpenAPI documentation
+
+- **Users DTOs** (`src/modules/users/dto/`)
+  - `UpdateUserDto` - Partial update with firstName, lastName, password validation
+  - `GetUsersQueryDto` - Pagination (page, limit) and role filter for user listing
+  - `UserResponseDto` - User data response without password field
+  - `PaginatedUsersResponseDto` - Paginated response with total count and metadata
+
 - **Docker Deployment Configuration**
   - `Dockerfile` - Multi-stage build for optimized production images
     - Stage 1 (deps): Install dependencies and generate Prisma client

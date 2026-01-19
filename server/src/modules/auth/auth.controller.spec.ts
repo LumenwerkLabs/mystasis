@@ -266,9 +266,9 @@ describe('AuthController', () => {
         );
 
         // Act & Assert
-        await expect(controller.register(registerDto, mockResponse)).rejects.toThrow(
-          ConflictException,
-        );
+        await expect(
+          controller.register(registerDto, mockResponse),
+        ).rejects.toThrow(ConflictException);
       });
 
       it('should propagate service errors', async () => {
@@ -278,9 +278,9 @@ describe('AuthController', () => {
         );
 
         // Act & Assert
-        await expect(controller.register(registerDto, mockResponse)).rejects.toThrow(
-          'Service unavailable',
-        );
+        await expect(
+          controller.register(registerDto, mockResponse),
+        ).rejects.toThrow('Service unavailable');
       });
     });
 
@@ -382,9 +382,9 @@ describe('AuthController', () => {
         };
 
         // Act & Assert
-        await expect(controller.login(wrongPasswordDto, mockResponse)).rejects.toThrow(
-          UnauthorizedException,
-        );
+        await expect(
+          controller.login(wrongPasswordDto, mockResponse),
+        ).rejects.toThrow(UnauthorizedException);
       });
 
       it('should propagate service errors', async () => {

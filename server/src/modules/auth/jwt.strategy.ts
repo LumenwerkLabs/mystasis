@@ -22,7 +22,7 @@ interface JwtPayload {
  * Cookie name for storing JWT token.
  * Used by web clients with HttpOnly cookies for XSS protection.
  */
-export const JWT_COOKIE_NAME = 'access_token';
+export const JWT_COOKIE_NAME: string = 'access_token';
 
 /**
  * Extracts JWT token from either HttpOnly cookie or Authorization header.

@@ -11,7 +11,7 @@ import * as bcrypt from 'bcrypt';
  * User type without password field for safe return values.
  * Used for all API responses to prevent password leakage.
  */
-type UserWithoutPassword = Omit<User, 'password'>;
+export type UserWithoutPassword = Omit<User, 'password'>;
 
 /**
  * Removes password field from user object for safe return.
@@ -295,5 +295,73 @@ export class UsersService {
     });
 
     return excludePassword(user);
+  }
+
+  /**
+   * Retrieves paginated users filtered by clinic.
+   *
+   * @description
+   * Returns a paginated list of users belonging to a specific clinic.
+   * Supports optional filtering by role and custom pagination.
+   * Used by clinicians to list patients in their clinic.
+   *
+   * @param options - Query options
+   * @param options.clinicId - Required clinic ID for multi-tenancy filtering
+   * @param options.role - Optional role filter (PATIENT or CLINICIAN)
+   * @param options.page - Page number (1-indexed, defaults to 1)
+   * @param options.limit - Items per page (defaults to 10)
+   *
+   * @returns Paginated response with users (without passwords), total count, and pagination metadata
+   *
+   * @example
+   * // Get first page of patients in a clinic
+   * const result = await usersService.findAllPaginated({
+   *   clinicId: 'clinic-uuid',
+   *   role: UserRole.PATIENT,
+   *   page: 1,
+   *   limit: 20,
+   * });
+   */
+  async findAllPaginated(options: {
+    clinicId: string;
+    role?: UserRole;
+    page?: number;
+    limit?: number;
+  }): Promise<{
+    data: UserWithoutPassword[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = options.page ?? 1;
+    const limit = options.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    // Build where clause
+    const where: { clinicId: string; role?: UserRole } = {
+      clinicId: options.clinicId,
+    };
+
+    if (options.role) {
+      where.role = options.role;
+    }
+
+    // Execute count and findMany in parallel for efficiency
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+
+    return {
+      data: users.map(excludePassword),
+      total,
+      page,
+      limit,
+    };
   }
 }
