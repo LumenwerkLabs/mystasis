@@ -1,0 +1,45 @@
+# ===========================================
+# Mystasis Backend Docker Compose - Production Override
+# ===========================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This override:
+# - Adds resource limits
+# - Configures logging
+# - Adds restart policies
+# - Removes exposed database port
+
+services:
+  api:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    restart: always
+    # Don't expose database port in production
+    ports: []
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

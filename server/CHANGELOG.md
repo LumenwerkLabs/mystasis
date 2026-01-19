@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Docker Deployment Configuration**
+  - `Dockerfile` - Multi-stage build for optimized production images
+    - Stage 1 (deps): Install dependencies and generate Prisma client
+    - Stage 2 (builder): Build TypeScript application
+    - Stage 3 (production): Minimal runtime image with non-root user
+    - Health check endpoint integration (`/health/live`)
+    - Automatic database migrations on startup
+  - `docker-compose.yml` - Main orchestration file
+    - TimescaleDB (PostgreSQL with time-series extensions) database service
+    - NestJS API service with health checks
+    - Configurable via environment variables
+  - `docker-compose.dev.yml` - Development override
+    - Hot reload with source code mounting
+    - Debug port exposed (9229)
+    - Disabled health check for faster startup
+  - `docker-compose.prod.yml` - Production override
+    - Resource limits (CPU, memory)
+    - Logging configuration with rotation
+    - Database port not exposed externally
+  - `.dockerignore` - Optimized build context
+
 - **Clinic Management with Multi-Tenancy**
   - `Clinic` model added to database schema (`prisma/schema.prisma`)
     - Fields: id (UUID), name, address, phone, timestamps

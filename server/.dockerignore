@@ -1,0 +1,61 @@
+# ===========================================
+# Docker Ignore File
+# ===========================================
+
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Build output
+dist
+coverage
+
+# Environment files (use docker-compose env vars instead)
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git
+.gitignore
+
+# Docker files (no need to copy into image)
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+*.md
+!README.md
+
+# Tests (not needed in production)
+test
+**/*.spec.ts
+**/*.test.ts
+jest.config.js
+jest-e2e.json
+
+# Logs
+logs
+*.log
+
+# Temporary files
+tmp
+temp
+.tmp
+
+# Pipeline logs
+.pipeline
+
+# Misc
+.eslintcache
+.prettierignore
+.editorconfig

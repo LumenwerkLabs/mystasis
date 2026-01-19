@@ -1,0 +1,94 @@
+# ===========================================
+# Mystasis Backend Docker Compose
+# ===========================================
+# Usage:
+#   Development: docker-compose up -d
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Logs:        docker-compose logs -f api
+#   Stop:        docker-compose down
+#   Reset DB:    docker-compose down -v
+
+services:
+  # ===========================================
+  # PostgreSQL with TimescaleDB
+  # ===========================================
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: mystasis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mystasis}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mystasis_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-mystasis_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mystasis} -d ${POSTGRES_DB:-mystasis_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - mystasis-network
+
+  # ===========================================
+  # NestJS API Server
+  # ===========================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: mystasis-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mystasis}:${POSTGRES_PASSWORD:-mystasis_dev_password}@db:5432/${POSTGRES_DB:-mystasis_db}?schema=public
+
+      # Application
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+
+      # JWT Configuration
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+
+      # LLM Integration (optional)
+      LLM_API_URL: ${LLM_API_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-log}
+
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${API_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - mystasis-network
+
+# ===========================================
+# Networks
+# ===========================================
+networks:
+  mystasis-network:
+    driver: bridge
+
+# ===========================================
+# Volumes
+# ===========================================
+volumes:
+  postgres_data:
+    driver: local

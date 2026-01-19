@@ -1,0 +1,37 @@
+# ===========================================
+# Mystasis Backend Docker Compose - Development Override
+# ===========================================
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This override:
+# - Mounts source code for hot reload
+# - Uses development environment
+# - Exposes debug port
+# - Disables health check waiting
+
+services:
+  api:
+    build:
+      target: deps  # Use deps stage which has all dependencies
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    volumes:
+      # Mount source code for hot reload
+      - ./src:/app/src:ro
+      - ./prisma:/app/prisma:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ./nest-cli.json:/app/nest-cli.json:ro
+    ports:
+      - "${API_PORT:-3000}:3000"
+      - "9229:9229"  # Debug port
+    # Override command for development with hot reload
+    command: ["npm", "run", "start:dev"]
+    # Disable health check in dev (faster startup)
+    healthcheck:
+      disable: true
+
+  db:
+    # Expose database directly in development
+    ports:
+      - "${DB_PORT:-5432}:5432"

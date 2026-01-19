@@ -25,6 +25,18 @@
 | Run migrations | `cd server && npx prisma migrate dev` |
 | Build for production | `cd server && npm run build` |
 
+### Docker Commands
+
+| Action | Command |
+|--------|---------|
+| Start (production) | `docker-compose up -d` |
+| Start (development) | `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d` |
+| View logs | `docker-compose logs -f api` |
+| Stop services | `docker-compose down` |
+| Reset database | `docker-compose down -v` |
+| Build image | `docker-compose build` |
+| Run migrations | `docker-compose exec api npx prisma migrate deploy` |
+
 ---
 
 ## Architecture Overview
