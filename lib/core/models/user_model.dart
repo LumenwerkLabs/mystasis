@@ -4,6 +4,7 @@ class UserModel {
   final String email;
   final String? firstName;
   final String? lastName;
+  final DateTime birthdate;
   final String role;
   final String? clinicId;
   final DateTime? createdAt;
@@ -12,6 +13,7 @@ class UserModel {
   const UserModel({
     required this.id,
     required this.email,
+    required this.birthdate,
     required this.role,
     this.firstName,
     this.lastName,
@@ -50,6 +52,7 @@ class UserModel {
     return UserModel(
       id: json['id'] as String,
       email: json['email'] as String,
+      birthdate: DateTime.parse(json['birthdate'] as String),
       role: json['role'] as String? ?? 'patient',
       firstName: json['firstName'] as String?,
       lastName: json['lastName'] as String?,
@@ -68,6 +71,7 @@ class UserModel {
     return {
       'id': id,
       'email': email,
+      'birthdate': birthdate.toIso8601String(),
       'role': role,
       'firstName': firstName,
       'lastName': lastName,
@@ -83,6 +87,7 @@ class UserModel {
     String? email,
     String? firstName,
     String? lastName,
+    DateTime? birthdate,
     String? role,
     String? clinicId,
     DateTime? createdAt,
@@ -91,6 +96,7 @@ class UserModel {
     return UserModel(
       id: id ?? this.id,
       email: email ?? this.email,
+      birthdate: birthdate ?? this.birthdate,
       role: role ?? this.role,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
@@ -108,13 +114,14 @@ class UserModel {
         other.email == email &&
         other.firstName == firstName &&
         other.lastName == lastName &&
+        other.birthdate == birthdate &&
         other.role == role &&
         other.clinicId == clinicId;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, email, firstName, lastName, role, clinicId);
+    return Object.hash(id, email, firstName, lastName, birthdate, role, clinicId);
   }
 
   @override

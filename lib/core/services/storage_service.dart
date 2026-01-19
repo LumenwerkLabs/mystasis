@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Exception thrown when storage operations fail
@@ -18,7 +19,7 @@ abstract class SecureStorageWrapper {
   Future<void> deleteAll();
 }
 
-/// Default implementation using flutter_secure_storage
+/// Default implementation using flutter_secure_storage (for mobile platforms)
 class FlutterSecureStorageWrapper implements SecureStorageWrapper {
   final FlutterSecureStorage _storage;
 
@@ -46,7 +47,68 @@ class FlutterSecureStorageWrapper implements SecureStorageWrapper {
   }
 }
 
-/// Service for securely storing authentication tokens and user data
+/// Memory-only storage implementation for web platform.
+///
+/// On web, authentication is handled via HttpOnly cookies which are:
+/// - Set by the server on login/register
+/// - Automatically sent with requests by the browser
+/// - Inaccessible to JavaScript (XSS protection)
+///
+/// This storage wrapper:
+/// - Does NOT store tokens (they're in HttpOnly cookies)
+/// - Stores user metadata (userId) in memory only
+/// - Session is lost on page refresh (but cookie remains valid)
+///
+/// For persistent user data on web, the app re-validates the session
+/// via the /auth/me endpoint on startup using the cookie.
+class WebMemoryStorageWrapper implements SecureStorageWrapper {
+  final Map<String, String> _storage = {};
+
+  @override
+  Future<void> write({required String key, required String? value}) async {
+    if (value != null) {
+      _storage[key] = value;
+    } else {
+      _storage.remove(key);
+    }
+  }
+
+  @override
+  Future<String?> read({required String key}) async {
+    return _storage[key];
+  }
+
+  @override
+  Future<void> delete({required String key}) async {
+    _storage.remove(key);
+  }
+
+  @override
+  Future<void> deleteAll() async {
+    _storage.clear();
+  }
+}
+
+/// Factory function to create the appropriate storage wrapper for the platform.
+/// - Mobile: Uses flutter_secure_storage (Keychain/EncryptedSharedPreferences)
+/// - Web: Uses memory-only storage (auth via HttpOnly cookies)
+SecureStorageWrapper createPlatformStorageWrapper() {
+  if (kIsWeb) {
+    return WebMemoryStorageWrapper();
+  }
+  return FlutterSecureStorageWrapper();
+}
+
+/// Service for securely storing authentication tokens and user data.
+///
+/// Platform-specific behavior:
+/// - **Mobile**: Uses flutter_secure_storage (Keychain on iOS, EncryptedSharedPreferences on Android)
+/// - **Web**: Uses memory-only storage (auth is handled via HttpOnly cookies set by server)
+///
+/// On web, the token is NOT stored client-side. Instead:
+/// 1. Server sets HttpOnly cookie on login/register
+/// 2. Browser automatically sends cookie with requests
+/// 3. Token is inaccessible to JavaScript (XSS protection)
 class StorageService {
   static const String _tokenKey = 'auth_token';
   static const String _userIdKey = 'user_id';
@@ -54,7 +116,7 @@ class StorageService {
   final SecureStorageWrapper _secureStorage;
 
   StorageService({SecureStorageWrapper? secureStorage})
-      : _secureStorage = secureStorage ?? FlutterSecureStorageWrapper();
+      : _secureStorage = secureStorage ?? createPlatformStorageWrapper();
 
   /// Save the authentication token
   Future<void> saveToken(String token) async {

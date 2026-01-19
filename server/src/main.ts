@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import cookieParser from 'cookie-parser';
 
 /**
  * Bootstrap the NestJS application with security middleware and global configuration.
@@ -35,6 +36,9 @@ async function bootstrap(): Promise<void> {
       },
     }),
   );
+
+  // Cookie parser middleware for HttpOnly cookie authentication (web clients)
+  app.use(cookieParser());
 
   // Security: Restrictive CORS policy
   // In production, CORS_ORIGIN must be explicitly configured

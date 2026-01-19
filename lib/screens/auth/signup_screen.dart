@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/providers/auth_provider.dart';
@@ -19,6 +20,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  DateTime? _selectedBirthdate;
 
   @override
   void dispose() {
@@ -33,10 +35,18 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedBirthdate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your birthdate')),
+      );
+      return;
+    }
+
     final authProvider = context.read<AuthProvider>();
     final success = await authProvider.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
+      birthdate: _selectedBirthdate!,
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim().isNotEmpty
           ? _lastNameController.text.trim()
@@ -45,6 +55,25 @@ class _SignupScreenState extends State<SignupScreen> {
 
     if (success && mounted) {
       Navigator.of(context).pushReplacementNamed('/dashboard');
+    }
+  }
+
+  Future<void> _selectBirthdate() async {
+    final now = DateTime.now();
+    final initialDate = _selectedBirthdate ?? DateTime(now.year - 25, now.month, now.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1900),
+      lastDate: now,
+      helpText: 'Select your birthdate',
+    );
+
+    if (picked != null && picked != _selectedBirthdate) {
+      setState(() {
+        _selectedBirthdate = picked;
+      });
     }
   }
 
@@ -169,6 +198,33 @@ class _SignupScreenState extends State<SignupScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Last Name (optional)',
                         prefixIcon: Icon(Icons.person_outline),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Birthdate Field
+                    InkWell(
+                      onTap: _selectBirthdate,
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Birthdate',
+                          prefixIcon: const Icon(Icons.cake_outlined),
+                          errorText: _selectedBirthdate == null &&
+                                  _formKey.currentState?.validate() == false
+                              ? null
+                              : null,
+                        ),
+                        child: Text(
+                          _selectedBirthdate != null
+                              ? DateFormat('MMM dd, yyyy')
+                                  .format(_selectedBirthdate!)
+                              : 'Select your birthdate',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: _selectedBirthdate != null
+                                    ? null
+                                    : MystasisTheme.neutralGrey,
+                              ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

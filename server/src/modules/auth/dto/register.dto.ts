@@ -5,6 +5,7 @@ import {
   IsString,
   MinLength,
   Matches,
+  IsISO8601,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -61,6 +62,19 @@ export class RegisterDto {
     message: 'Password must contain at least one letter and one number',
   })
   password: string;
+
+  /**
+   * User's birthdate.
+   * Must be a valid ISO 8601 date string.
+   */
+  @ApiProperty({
+    description: 'User birthdate in ISO 8601 format',
+    example: '1990-01-15',
+    format: 'date',
+  })
+  @IsISO8601({}, { message: 'Birthdate must be a valid ISO 8601 date' })
+  @IsNotEmpty({ message: 'Birthdate is required' })
+  birthdate: string;
 
   /**
    * User's first name.

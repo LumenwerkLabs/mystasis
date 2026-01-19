@@ -25,6 +25,7 @@ describe('RegisterDto', () => {
   let RegisterDto: new () => {
     email?: string;
     password?: string;
+    birthdate?: string;
     firstName?: string;
     lastName?: string;
   };
@@ -49,13 +50,14 @@ describe('RegisterDto', () => {
   // ============================================
 
   describe('valid registration data', () => {
-    it('should pass validation with valid email and password', async () => {
+    it('should pass validation with valid email, password, and birthdate', async () => {
       // Arrange
       if (!RegisterDto) return;
 
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -72,6 +74,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         firstName: 'John',
         lastName: 'Doe',
       });
@@ -90,6 +93,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         lastName: 'Doe',
       });
 
@@ -107,6 +111,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         firstName: 'John',
       });
 
@@ -129,6 +134,7 @@ describe('RegisterDto', () => {
 
       const dto = plainToInstance(RegisterDto, {
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -146,6 +152,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: '',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -163,6 +170,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'invalidemail.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -180,6 +188,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -197,6 +206,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: '@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -214,6 +224,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user @example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -240,6 +251,7 @@ describe('RegisterDto', () => {
         const dto = plainToInstance(RegisterDto, {
           email,
           password: 'SecurePass123',
+          birthdate: '1990-01-15',
         });
 
         // Act
@@ -262,6 +274,7 @@ describe('RegisterDto', () => {
 
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -279,6 +292,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: '',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -296,6 +310,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'Pass1', // Only 5 chars
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -313,6 +328,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'Pass12a', // 7 chars
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -330,6 +346,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'Pass123a', // 8 chars with letter and number
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -346,6 +363,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: '12345678', // Numbers only
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -363,6 +381,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'PasswordOnly', // Letters only
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -390,6 +409,7 @@ describe('RegisterDto', () => {
         const dto = plainToInstance(RegisterDto, {
           email: 'user@example.com',
           password,
+          birthdate: '1990-01-15',
         });
 
         // Act
@@ -407,6 +427,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'P@ssw0rd!',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -429,6 +450,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -445,6 +467,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -461,6 +484,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         firstName: 'John',
       });
 
@@ -478,6 +502,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         lastName: 'Doe',
       });
 
@@ -495,6 +520,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         firstName: 'Mary-Jane',
         lastName: "O'Connor",
       });
@@ -519,6 +545,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'invalid',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -537,6 +564,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'short',
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -555,6 +583,7 @@ describe('RegisterDto', () => {
       const dto = plainToInstance(RegisterDto, {
         email: 'user@example.com',
         password: 'noNumbers', // No numbers
+        birthdate: '1990-01-15',
       });
 
       // Act
@@ -591,12 +620,14 @@ describe('RegisterDto', () => {
       // Act
       dto.email = 'user@example.com';
       dto.password = 'SecurePass123';
+      dto.birthdate = '1990-01-15';
       dto.firstName = 'John';
       dto.lastName = 'Doe';
 
       // Assert
       expect(dto.email).toBe('user@example.com');
       expect(dto.password).toBe('SecurePass123');
+      expect(dto.birthdate).toBe('1990-01-15');
       expect(dto.firstName).toBe('John');
       expect(dto.lastName).toBe('Doe');
     });
@@ -608,6 +639,7 @@ describe('RegisterDto', () => {
       const plainObject = {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         firstName: 'John',
         lastName: 'Doe',
       };
@@ -619,6 +651,7 @@ describe('RegisterDto', () => {
       expect(dto).toBeInstanceOf(RegisterDto);
       expect(dto.email).toBe(plainObject.email);
       expect(dto.password).toBe(plainObject.password);
+      expect(dto.birthdate).toBe(plainObject.birthdate);
       expect(dto.firstName).toBe(plainObject.firstName);
       expect(dto.lastName).toBe(plainObject.lastName);
     });
@@ -630,6 +663,7 @@ describe('RegisterDto', () => {
       const plainObject = {
         email: 'user@example.com',
         password: 'SecurePass123',
+        birthdate: '1990-01-15',
         extraField: 'should be ignored',
         anotherExtra: 123,
       };
@@ -640,6 +674,99 @@ describe('RegisterDto', () => {
 
       // Assert - should still be valid, extra props ignored
       expect(errors.length).toBe(0);
+    });
+  });
+
+  // ============================================
+  // BIRTHDATE VALIDATION TESTS
+  // ============================================
+
+  describe('birthdate validation', () => {
+    it('should reject missing birthdate', async () => {
+      // Arrange
+      if (!RegisterDto) return;
+
+      const dto = plainToInstance(RegisterDto, {
+        email: 'user@example.com',
+        password: 'SecurePass123',
+      });
+
+      // Act
+      const errors = await validate(dto);
+
+      // Assert
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.property === 'birthdate')).toBe(true);
+    });
+
+    it('should reject empty birthdate', async () => {
+      // Arrange
+      if (!RegisterDto) return;
+
+      const dto = plainToInstance(RegisterDto, {
+        email: 'user@example.com',
+        password: 'SecurePass123',
+        birthdate: '',
+      });
+
+      // Act
+      const errors = await validate(dto);
+
+      // Assert
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.property === 'birthdate')).toBe(true);
+    });
+
+    it('should reject invalid date format', async () => {
+      // Arrange
+      if (!RegisterDto) return;
+
+      const dto = plainToInstance(RegisterDto, {
+        email: 'user@example.com',
+        password: 'SecurePass123',
+        birthdate: 'not-a-date',
+      });
+
+      // Act
+      const errors = await validate(dto);
+
+      // Assert
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some((e) => e.property === 'birthdate')).toBe(true);
+    });
+
+    it('should accept valid ISO 8601 date', async () => {
+      // Arrange
+      if (!RegisterDto) return;
+
+      const dto = plainToInstance(RegisterDto, {
+        email: 'user@example.com',
+        password: 'SecurePass123',
+        birthdate: '1990-01-15',
+      });
+
+      // Act
+      const errors = await validate(dto);
+
+      // Assert
+      expect(errors.filter((e) => e.property === 'birthdate').length).toBe(0);
+    });
+
+    it('should accept valid ISO 8601 date with time', async () => {
+      // Arrange
+      if (!RegisterDto) return;
+
+      const dto = plainToInstance(RegisterDto, {
+        email: 'user@example.com',
+        password: 'SecurePass123',
+        birthdate: '1990-01-15T00:00:00.000Z',
+      });
+
+      // Act
+      const errors = await validate(dto);
+
+      // Assert
+      expect(errors.filter((e) => e.property === 'birthdate').length).toBe(0);
     });
   });
 });

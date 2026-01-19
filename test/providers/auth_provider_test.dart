@@ -63,6 +63,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenAnswer((_) => completer.future);
@@ -71,6 +72,7 @@ void main() {
         final signUpFuture = authProvider.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
           firstName: 'John',
           lastName: 'Doe',
         );
@@ -82,6 +84,7 @@ void main() {
         completer.complete(UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         ));
         await signUpFuture;
@@ -97,12 +100,14 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenAnswer((_) async => newUser);
@@ -111,6 +116,7 @@ void main() {
         await authProvider.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
           firstName: 'John',
           lastName: 'Doe',
         );
@@ -129,11 +135,13 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenAnswer((_) async => UserModel(
               id: 'user_123',
               email: 'test@example.com',
+              birthdate: DateTime(1990, 1, 15),
               role: 'patient',
             ));
 
@@ -141,6 +149,7 @@ void main() {
         final result = await authProvider.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -152,6 +161,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -163,6 +173,7 @@ void main() {
         await authProvider.signUp(
           email: 'existing@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -175,6 +186,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -186,6 +198,7 @@ void main() {
         final result = await authProvider.signUp(
           email: 'existing@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -197,6 +210,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -208,6 +222,7 @@ void main() {
         await authProvider.signUp(
           email: 'existing@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -222,6 +237,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -232,6 +248,7 @@ void main() {
         await authProvider.signUp(
           email: 'invalid',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
         expect(authProvider.errorMessage, isNotNull);
 
@@ -239,11 +256,13 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenAnswer((_) async => UserModel(
               id: 'user_123',
               email: 'valid@example.com',
+              birthdate: DateTime(1990, 1, 15),
               role: 'patient',
             ));
 
@@ -251,6 +270,7 @@ void main() {
         await authProvider.signUp(
           email: 'valid@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -280,6 +300,7 @@ void main() {
         completer.complete(UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         ));
         await signInFuture;
@@ -294,6 +315,7 @@ void main() {
           id: 'user_123',
           email: 'test@example.com',
           firstName: 'John',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -325,6 +347,7 @@ void main() {
             )).thenAnswer((_) async => UserModel(
               id: 'user_123',
               email: 'test@example.com',
+              birthdate: DateTime(1990, 1, 15),
               role: 'patient',
             ));
 
@@ -448,6 +471,7 @@ void main() {
             )).thenAnswer((_) async => UserModel(
               id: 'user_123',
               email: 'test@example.com',
+              birthdate: DateTime(1990, 1, 15),
               role: 'patient',
             ));
 
@@ -468,6 +492,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -575,6 +600,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -604,6 +630,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -638,6 +665,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -654,6 +682,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
         authStateController.add(user);
@@ -680,6 +709,7 @@ void main() {
         authStateController.add(UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         ));
         await Future.delayed(Duration.zero);
@@ -695,6 +725,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -706,6 +737,7 @@ void main() {
         await authProvider.signUp(
           email: 'invalid',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -720,6 +752,7 @@ void main() {
         when(() => mockAuthService.signUp(
               email: any(named: 'email'),
               password: any(named: 'password'),
+              birthdate: any(named: 'birthdate'),
               firstName: any(named: 'firstName'),
               lastName: any(named: 'lastName'),
             )).thenThrow(AuthException(
@@ -731,6 +764,7 @@ void main() {
         await authProvider.signUp(
           email: 'test@example.com',
           password: '123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -804,6 +838,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 

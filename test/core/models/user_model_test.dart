@@ -14,6 +14,7 @@ void main() {
           'email': 'test@example.com',
           'firstName': 'John',
           'lastName': 'Doe',
+          'birthdate': '1990-01-15',
           'role': 'patient',
           'createdAt': '2024-01-15T10:30:00.000Z',
         };
@@ -26,6 +27,10 @@ void main() {
         expect(user.email, equals('test@example.com'));
         expect(user.firstName, equals('John'));
         expect(user.lastName, equals('Doe'));
+        expect(user.birthdate, isA<DateTime>());
+        expect(user.birthdate.year, equals(1990));
+        expect(user.birthdate.month, equals(1));
+        expect(user.birthdate.day, equals(15));
         expect(user.role, equals('patient'));
         expect(user.createdAt, isA<DateTime>());
       });
@@ -37,6 +42,7 @@ void main() {
           'email': 'test@example.com',
           'firstName': null,
           'lastName': 'Doe',
+          'birthdate': '1990-01-15',
           'role': 'patient',
         };
 
@@ -57,6 +63,7 @@ void main() {
           'email': 'test@example.com',
           'firstName': 'John',
           'lastName': null,
+          'birthdate': '1990-01-15',
           'role': 'patient',
         };
 
@@ -75,6 +82,7 @@ void main() {
           'email': 'test@example.com',
           'firstName': null,
           'lastName': null,
+          'birthdate': '1990-01-15',
           'role': 'patient',
         };
 
@@ -91,6 +99,7 @@ void main() {
         final json = {
           'id': 'user_123',
           'email': 'test@example.com',
+          'birthdate': '1990-01-15',
           'role': 'patient',
         };
 
@@ -100,6 +109,7 @@ void main() {
         // Assert
         expect(user.id, equals('user_123'));
         expect(user.email, equals('test@example.com'));
+        expect(user.birthdate.year, equals(1990));
         expect(user.firstName, isNull);
         expect(user.lastName, isNull);
         expect(user.createdAt, isNull);
@@ -112,6 +122,7 @@ void main() {
           'email': 'doctor@clinic.com',
           'firstName': 'Dr. Jane',
           'lastName': 'Smith',
+          'birthdate': '1980-05-20',
           'role': 'clinician',
         };
 
@@ -127,6 +138,7 @@ void main() {
         final json = {
           'id': 'user_123',
           'email': 'test@example.com',
+          'birthdate': '1990-01-15',
           'role': 'patient',
           'createdAt': '2024-06-15T14:30:00.000Z',
         };
@@ -146,6 +158,7 @@ void main() {
         final json = {
           'id': 'user_123',
           'email': 'test@example.com',
+          'birthdate': '1990-01-15',
           'role': 'patient',
           'createdAt': null,
         };
@@ -155,6 +168,42 @@ void main() {
 
         // Assert
         expect(user.createdAt, isNull);
+      });
+
+      test('should parse birthdate correctly with ISO 8601 date format', () {
+        // Arrange
+        final json = {
+          'id': 'user_123',
+          'email': 'test@example.com',
+          'birthdate': '1985-12-25',
+          'role': 'patient',
+        };
+
+        // Act
+        final user = UserModel.fromJson(json);
+
+        // Assert
+        expect(user.birthdate.year, equals(1985));
+        expect(user.birthdate.month, equals(12));
+        expect(user.birthdate.day, equals(25));
+      });
+
+      test('should parse birthdate with full ISO 8601 datetime format', () {
+        // Arrange
+        final json = {
+          'id': 'user_123',
+          'email': 'test@example.com',
+          'birthdate': '1985-12-25T00:00:00.000Z',
+          'role': 'patient',
+        };
+
+        // Act
+        final user = UserModel.fromJson(json);
+
+        // Assert
+        expect(user.birthdate.year, equals(1985));
+        expect(user.birthdate.month, equals(12));
+        expect(user.birthdate.day, equals(25));
       });
     });
 
@@ -166,6 +215,7 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -183,6 +233,7 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: null,
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -200,6 +251,7 @@ void main() {
           email: 'test@example.com',
           firstName: null,
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -217,6 +269,7 @@ void main() {
           email: 'test@example.com',
           firstName: null,
           lastName: null,
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -234,6 +287,7 @@ void main() {
           email: 'test@example.com',
           firstName: '  John  ',
           lastName: '  Doe  ',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -251,6 +305,7 @@ void main() {
           email: 'test@example.com',
           firstName: '',
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -268,6 +323,7 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: '',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -282,12 +338,14 @@ void main() {
     group('toJson', () {
       test('should produce correct map with all fields', () {
         // Arrange
+        final birthdate = DateTime(1990, 1, 15);
         final createdAt = DateTime(2024, 1, 15, 10, 30);
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: birthdate,
           role: 'patient',
           createdAt: createdAt,
         );
@@ -300,6 +358,7 @@ void main() {
         expect(json['email'], equals('test@example.com'));
         expect(json['firstName'], equals('John'));
         expect(json['lastName'], equals('Doe'));
+        expect(json['birthdate'], equals(birthdate.toIso8601String()));
         expect(json['role'], equals('patient'));
         expect(json['createdAt'], equals(createdAt.toIso8601String()));
       });
@@ -309,6 +368,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -318,6 +378,7 @@ void main() {
         // Assert
         expect(json['id'], equals('user_123'));
         expect(json['email'], equals('test@example.com'));
+        expect(json['birthdate'], isNotNull);
         expect(json['firstName'], isNull);
         expect(json['lastName'], isNull);
         expect(json['createdAt'], isNull);
@@ -330,6 +391,7 @@ void main() {
           'email': 'test@example.com',
           'firstName': 'John',
           'lastName': 'Doe',
+          'birthdate': '1990-01-15',
           'role': 'clinician',
           'createdAt': '2024-06-15T14:30:00.000Z',
         };
@@ -344,6 +406,10 @@ void main() {
         expect(resultJson['firstName'], equals(originalJson['firstName']));
         expect(resultJson['lastName'], equals(originalJson['lastName']));
         expect(resultJson['role'], equals(originalJson['role']));
+        // Birthdate should be preserved (though format may differ)
+        expect(user.birthdate.year, equals(1990));
+        expect(user.birthdate.month, equals(1));
+        expect(user.birthdate.day, equals(15));
       });
     });
 
@@ -355,6 +421,7 @@ void main() {
           email: 'old@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -366,6 +433,7 @@ void main() {
         expect(updated.email, equals('new@example.com'));
         expect(updated.firstName, equals('John'));
         expect(updated.lastName, equals('Doe'));
+        expect(updated.birthdate, equals(original.birthdate));
       });
 
       test('should create copy with updated firstName', () {
@@ -375,6 +443,7 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -386,14 +455,34 @@ void main() {
         expect(updated.lastName, equals('Doe'));
       });
 
+      test('should create copy with updated birthdate', () {
+        // Arrange
+        final original = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
+          role: 'patient',
+        );
+
+        // Act
+        final newBirthdate = DateTime(1985, 6, 20);
+        final updated = original.copyWith(birthdate: newBirthdate);
+
+        // Assert
+        expect(updated.birthdate, equals(newBirthdate));
+        expect(original.birthdate, equals(DateTime(1990, 1, 15)));
+      });
+
       test('should preserve all fields when no arguments provided', () {
         // Arrange
+        final birthdate = DateTime(1990, 1, 15);
         final createdAt = DateTime(2024, 1, 15);
         final original = UserModel(
           id: 'user_123',
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: birthdate,
           role: 'patient',
           createdAt: createdAt,
         );
@@ -406,6 +495,7 @@ void main() {
         expect(copy.email, equals(original.email));
         expect(copy.firstName, equals(original.firstName));
         expect(copy.lastName, equals(original.lastName));
+        expect(copy.birthdate, equals(original.birthdate));
         expect(copy.role, equals(original.role));
         expect(copy.createdAt, equals(original.createdAt));
       });
@@ -414,11 +504,13 @@ void main() {
     group('equality', () {
       test('should be equal when all fields match', () {
         // Arrange
+        final birthdate = DateTime(1990, 1, 15);
         final user1 = UserModel(
           id: 'user_123',
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: birthdate,
           role: 'patient',
         );
         final user2 = UserModel(
@@ -426,6 +518,7 @@ void main() {
           email: 'test@example.com',
           firstName: 'John',
           lastName: 'Doe',
+          birthdate: birthdate,
           role: 'patient',
         );
 
@@ -435,14 +528,36 @@ void main() {
 
       test('should not be equal when id differs', () {
         // Arrange
+        final birthdate = DateTime(1990, 1, 15);
         final user1 = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: birthdate,
           role: 'patient',
         );
         final user2 = UserModel(
           id: 'user_456',
           email: 'test@example.com',
+          birthdate: birthdate,
+          role: 'patient',
+        );
+
+        // Assert
+        expect(user1, isNot(equals(user2)));
+      });
+
+      test('should not be equal when birthdate differs', () {
+        // Arrange
+        final user1 = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
+          role: 'patient',
+        );
+        final user2 = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          birthdate: DateTime(1985, 6, 20),
           role: 'patient',
         );
 
@@ -457,6 +572,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'test@example.com',
+          birthdate: DateTime(1990, 1, 15),
           role: 'patient',
         );
 
@@ -470,6 +586,7 @@ void main() {
         final user = UserModel(
           id: 'user_123',
           email: 'doctor@example.com',
+          birthdate: DateTime(1980, 5, 20),
           role: 'clinician',
         );
 

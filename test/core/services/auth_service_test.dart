@@ -42,6 +42,7 @@ void main() {
         const password = 'password123';
         const firstName = 'John';
         const lastName = 'Doe';
+        final birthdate = DateTime(1990, 1, 15);
 
         final responseData = {
           'access_token': 'new_jwt_token',
@@ -50,6 +51,7 @@ void main() {
             'email': email,
             'firstName': firstName,
             'lastName': lastName,
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -68,6 +70,7 @@ void main() {
         await authService.signUp(
           email: email,
           password: password,
+          birthdate: birthdate,
           firstName: firstName,
           lastName: lastName,
         );
@@ -79,6 +82,7 @@ void main() {
             body: {
               'email': email,
               'password': password,
+              'birthdate': '1990-01-15',
               'firstName': firstName,
               'lastName': lastName,
             },
@@ -94,6 +98,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -112,6 +117,7 @@ void main() {
         await authService.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -127,6 +133,7 @@ void main() {
             'email': 'test@example.com',
             'firstName': 'John',
             'lastName': 'Doe',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -145,6 +152,7 @@ void main() {
         final result = await authService.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
           firstName: 'John',
           lastName: 'Doe',
         );
@@ -155,6 +163,7 @@ void main() {
         expect(result.email, equals('test@example.com'));
         expect(result.firstName, equals('John'));
         expect(result.lastName, equals('Doe'));
+        expect(result.birthdate.year, equals(1990));
       });
 
       test('should throw AuthException on duplicate email (409)', () async {
@@ -168,6 +177,7 @@ void main() {
           () => authService.signUp(
             email: 'existing@example.com',
             password: 'password123',
+            birthdate: DateTime(1990, 1, 15),
           ),
           throwsA(
             isA<AuthException>().having(
@@ -190,6 +200,7 @@ void main() {
           () => authService.signUp(
             email: 'invalid-email',
             password: 'password123',
+            birthdate: DateTime(1990, 1, 15),
           ),
           throwsA(
             isA<AuthException>().having(
@@ -208,6 +219,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -226,6 +238,7 @@ void main() {
         final result = await authService.signUp(
           email: 'test@example.com',
           password: 'password123',
+          birthdate: DateTime(1990, 1, 15),
         );
 
         // Assert
@@ -233,7 +246,11 @@ void main() {
         verify(
           () => mockApiClient.post(
             '/auth/register',
-            body: {'email': 'test@example.com', 'password': 'password123'},
+            body: {
+              'email': 'test@example.com',
+              'password': 'password123',
+              'birthdate': '1990-01-15',
+            },
           ),
         ).called(1);
       });
@@ -247,6 +264,7 @@ void main() {
             'user': {
               'id': 'user_123',
               'email': 'test@example.com',
+              'birthdate': '1990-01-15',
               'role': 'patient',
             },
           };
@@ -272,6 +290,7 @@ void main() {
           await authService.signUp(
             email: 'test@example.com',
             password: 'password123',
+            birthdate: DateTime(1990, 1, 15),
           );
 
           // Assert
@@ -288,7 +307,12 @@ void main() {
 
         final responseData = {
           'access_token': 'jwt_token',
-          'user': {'id': 'user_123', 'email': email, 'role': 'patient'},
+          'user': {
+            'id': 'user_123',
+            'email': email,
+            'birthdate': '1990-01-15',
+            'role': 'patient',
+          },
         };
 
         when(
@@ -321,6 +345,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -354,6 +379,7 @@ void main() {
             'email': 'test@example.com',
             'firstName': 'John',
             'lastName': 'Doe',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -411,6 +437,7 @@ void main() {
             'user': {
               'id': 'user_123',
               'email': 'test@example.com',
+              'birthdate': '1990-01-15',
               'role': 'patient',
             },
           };
@@ -514,6 +541,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -564,6 +592,7 @@ void main() {
           'id': 'user_123',
           'email': 'test@example.com',
           'firstName': 'John',
+          'birthdate': '1990-01-15',
           'role': 'patient',
         };
 
@@ -590,6 +619,7 @@ void main() {
           final userData = {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           };
 
@@ -693,6 +723,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -738,6 +769,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -774,6 +806,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -829,6 +862,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };
@@ -861,6 +895,7 @@ void main() {
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
+            'birthdate': '1990-01-15',
             'role': 'patient',
           },
         };

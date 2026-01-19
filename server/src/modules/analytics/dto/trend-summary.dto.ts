@@ -38,8 +38,7 @@ export class TrendDataPointDto {
    * Null when sample size is below threshold to prevent re-identification.
    */
   @ApiPropertyOptional({
-    description:
-      'Minimum value (null if sample size < 5 to protect privacy)',
+    description: 'Minimum value (null if sample size < 5 to protect privacy)',
     example: 55,
     nullable: true,
   })
@@ -52,8 +51,7 @@ export class TrendDataPointDto {
    * Null when sample size is below threshold to prevent re-identification.
    */
   @ApiPropertyOptional({
-    description:
-      'Maximum value (null if sample size < 5 to protect privacy)',
+    description: 'Maximum value (null if sample size < 5 to protect privacy)',
     example: 90,
     nullable: true,
   })

@@ -129,7 +129,8 @@ export class LlmController {
   })
   @ApiParam({
     name: 'userId',
-    description: 'UUID of the user to generate nudge for (must match authenticated user)',
+    description:
+      'UUID of the user to generate nudge for (must match authenticated user)',
     type: String,
     format: 'uuid',
   })

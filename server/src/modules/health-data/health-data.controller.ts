@@ -17,7 +17,6 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
-  ApiQuery,
 } from '@nestjs/swagger';
 import { BiomarkerType, UserRole } from '@prisma/client';
 import { HealthDataService } from './health-data.service';

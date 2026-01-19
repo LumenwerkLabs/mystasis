@@ -88,6 +88,7 @@ describe('AuthService', () => {
     password: '$2b$10$hashedPasswordHere',
     firstName: 'John',
     lastName: 'Doe',
+    birthdate: new Date('1990-01-15'),
     role: UserRole.PATIENT,
     clinicId: null,
     createdAt: new Date('2024-01-01'),
@@ -99,6 +100,7 @@ describe('AuthService', () => {
     email: mockUser.email,
     firstName: mockUser.firstName,
     lastName: mockUser.lastName,
+    birthdate: mockUser.birthdate,
     role: mockUser.role,
     clinicId: mockUser.clinicId,
     createdAt: mockUser.createdAt,
@@ -168,6 +170,7 @@ describe('AuthService', () => {
     const registerDto = {
       email: 'newuser@example.com',
       password: 'SecurePassword123!',
+      birthdate: '1990-01-15',
       firstName: 'Jane',
       lastName: 'Smith',
     };
@@ -180,6 +183,7 @@ describe('AuthService', () => {
           email: registerDto.email,
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
+          birthdate: new Date(registerDto.birthdate),
           role: UserRole.PATIENT, // Always PATIENT for new registrations
           clinicId: null,
           createdAt: new Date(),
@@ -224,6 +228,7 @@ describe('AuthService', () => {
           email: registerDto.email,
           firstName: registerDto.firstName,
           lastName: registerDto.lastName,
+          birthdate: new Date(registerDto.birthdate),
           role: UserRole.PATIENT,
           clinicId: null,
           createdAt: new Date(),
@@ -264,6 +269,7 @@ describe('AuthService', () => {
         const dtoWithoutRole = {
           email: 'newuser@example.com',
           password: 'SecurePassword123!',
+          birthdate: '1990-01-15',
           firstName: 'Jane',
           lastName: 'Smith',
         };
@@ -272,6 +278,7 @@ describe('AuthService', () => {
           email: dtoWithoutRole.email,
           firstName: dtoWithoutRole.firstName,
           lastName: dtoWithoutRole.lastName,
+          birthdate: new Date(dtoWithoutRole.birthdate),
           role: UserRole.PATIENT,
           clinicId: null,
           createdAt: new Date(),
@@ -724,6 +731,7 @@ describe('AuthService', () => {
           email: 'newuser@example.com',
           firstName: 'Jane',
           lastName: 'Smith',
+          birthdate: new Date('1990-01-15'),
           role: UserRole.PATIENT,
           clinicId: null,
           createdAt: new Date(),

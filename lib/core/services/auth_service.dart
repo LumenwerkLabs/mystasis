@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:mystasis/core/models/user_model.dart';
 import 'package:mystasis/core/services/api_client.dart';
 import 'package:mystasis/core/services/storage_service.dart';
@@ -24,19 +25,24 @@ class AuthException implements Exception {
 /// - Session management (checkAuthState, signOut)
 /// - Auth state broadcasting via Stream
 ///
-/// ## Security Considerations
+/// ## Platform-Specific Security
 ///
-/// Tokens are stored using [StorageService] which wraps flutter_secure_storage
-/// for platform-specific secure storage (Keychain on iOS, EncryptedSharedPreferences
-/// on Android).
+/// **Mobile (iOS/Android):**
+/// - Tokens stored via [StorageService] using flutter_secure_storage
+/// - iOS: Keychain (hardware-backed encryption)
+/// - Android: EncryptedSharedPreferences (AES-256)
+/// - Token sent via Authorization header
 ///
-/// ## Future Improvements (Security Audit Findings)
+/// **Web:**
+/// - Tokens stored in HttpOnly cookies (set by server)
+/// - Cookies are inaccessible to JavaScript (XSS protection)
+/// - Browser automatically sends cookies with requests
+/// - Logout calls server endpoint to clear cookie
 ///
-/// - **Token Refresh**: Currently no refresh token mechanism. When access token
-///   expires, users must re-authenticate. Consider adding refresh token support.
-/// - **Web Platform**: On web, flutter_secure_storage falls back to localStorage
-///   which is vulnerable to XSS. Consider HTTP-only cookies for web deployment.
-/// - **Biometric Auth**: Consider adding local_auth for biometric re-authentication.
+/// ## Future Improvements
+///
+/// - **Token Refresh**: Add refresh token mechanism for better UX
+/// - **Biometric Auth**: Add local_auth for biometric re-authentication on mobile
 class AuthService {
   late final ApiClient _apiClient;
   final StorageService _storageService;
@@ -68,6 +74,7 @@ class AuthService {
   Future<UserModel> signUp({
     required String email,
     required String password,
+    required DateTime birthdate,
     String? firstName,
     String? lastName,
   }) async {
@@ -75,6 +82,7 @@ class AuthService {
       final body = <String, dynamic>{
         'email': email,
         'password': password,
+        'birthdate': birthdate.toIso8601String().split('T')[0],
       };
 
       if (firstName != null) {
@@ -199,23 +207,45 @@ class AuthService {
     }
   }
 
-  /// Sign out the current user
+  /// Sign out the current user.
+  ///
+  /// Platform-specific behavior:
+  /// - **Mobile**: Clears local storage only
+  /// - **Web**: Calls logout endpoint to clear HttpOnly cookie, then clears local state
   Future<void> signOut() async {
+    // On web, call logout endpoint to clear the HttpOnly cookie
+    if (kIsWeb) {
+      try {
+        await _apiClient.post(ApiEndpoints.logout);
+      } catch (_) {
+        // Ignore errors - logout should always succeed locally
+        // even if the server request fails
+      }
+    }
     await _storageService.clearAll();
     _currentUser = null;
     _emitAuthState(null);
   }
 
-  /// Check authentication state on app launch
-  /// Validates stored token with the backend
+  /// Check authentication state on app launch.
+  ///
+  /// Platform-specific behavior:
+  /// - **Mobile**: Checks if token exists in storage, then validates with backend
+  /// - **Web**: Always calls /auth/me (browser sends HttpOnly cookie automatically)
+  ///
+  /// Validates stored token/cookie with the backend to ensure it's still valid.
   Future<void> checkAuthState() async {
-    final token = await _storageService.getToken();
-
-    if (token == null || token.isEmpty) {
-      _emitAuthState(null);
-      return;
+    // On mobile, check if we have a stored token first
+    if (!kIsWeb) {
+      final token = await _storageService.getToken();
+      if (token == null || token.isEmpty) {
+        _emitAuthState(null);
+        return;
+      }
     }
 
+    // On web, always try to call /auth/me - the browser will send the cookie
+    // if one exists. If no cookie, we'll get a 401.
     try {
       final userData = await _apiClient.get(ApiEndpoints.me);
       final user = UserModel.fromJson(userData as Map<String, dynamic>);
@@ -223,13 +253,13 @@ class AuthService {
       _currentUser = user;
       _emitAuthState(user);
     } on UnauthorizedException {
-      // Token is invalid or expired, clear all stored data
+      // Token/cookie is invalid or expired, clear all stored data
       await _storageService.clearAll();
       _currentUser = null;
       _emitAuthState(null);
     } on NetworkException {
       // Network error - don't clear token, just notify with null
-      // The user might be offline but have a valid token
+      // The user might be offline but have a valid token/cookie
       _emitAuthState(null);
     } catch (e) {
       // Other errors - emit null but don't clear token

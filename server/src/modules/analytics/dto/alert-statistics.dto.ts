@@ -151,8 +151,7 @@ export class AlertStatisticsDto {
    * Calculated from ACTIVE to RESOLVED status transitions.
    */
   @ApiProperty({
-    description:
-      'Average time in hours to resolve alerts (ACTIVE to RESOLVED)',
+    description: 'Average time in hours to resolve alerts (ACTIVE to RESOLVED)',
     example: 24,
     minimum: 0,
   })

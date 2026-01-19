@@ -39,7 +39,9 @@ describe('UsersService', () => {
     password: 'hashedPassword123',
     firstName: 'John',
     lastName: 'Doe',
+    birthdate: new Date('1990-01-15'),
     role: UserRole.PATIENT,
+    clinicId: null,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
   };
@@ -82,6 +84,7 @@ describe('UsersService', () => {
     const createUserDto = {
       email: 'newuser@example.com',
       password: 'plainTextPassword',
+      birthdate: new Date('1990-01-15'),
       firstName: 'Jane',
       lastName: 'Smith',
       role: UserRole.PATIENT,

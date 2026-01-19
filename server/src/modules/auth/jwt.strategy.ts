@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
 
@@ -18,11 +19,30 @@ interface JwtPayload {
 }
 
 /**
+ * Cookie name for storing JWT token.
+ * Used by web clients with HttpOnly cookies for XSS protection.
+ */
+export const JWT_COOKIE_NAME = 'access_token';
+
+/**
+ * Extracts JWT token from either HttpOnly cookie or Authorization header.
+ * Prioritizes cookie for web clients, falls back to header for mobile clients.
+ */
+function extractJwtFromCookieOrHeader(req: Request): string | null {
+  // First, try to extract from HttpOnly cookie (web clients)
+  if (req.cookies && req.cookies[JWT_COOKIE_NAME]) {
+    return req.cookies[JWT_COOKIE_NAME];
+  }
+  // Fall back to Authorization header (mobile clients)
+  return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+}
+
+/**
  * Passport JWT authentication strategy.
  *
  * @description Implements JWT token validation for protected routes using
- * Passport.js. Extracts the JWT token from the Authorization header and
- * validates it using the configured secret.
+ * Passport.js. Extracts the JWT token from either an HttpOnly cookie (for web
+ * clients with XSS protection) or the Authorization header (for mobile clients).
  *
  * @remarks
  * This strategy is used by JwtAuthGuard to protect routes. The validate()
@@ -31,8 +51,12 @@ interface JwtPayload {
  *
  * Configuration:
  * - JWT secret is loaded from auth.jwtSecret config
- * - Token is extracted from Authorization header as Bearer token
+ * - Token is extracted from cookie first, then Authorization header
  * - Expired tokens are rejected
+ *
+ * Security:
+ * - Web clients use HttpOnly cookies (immune to XSS)
+ * - Mobile clients use Authorization header (stored in secure storage)
  *
  * @example
  * // The strategy is automatically used when JwtAuthGuard is applied
@@ -51,7 +75,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractJwtFromCookieOrHeader,
       ignoreExpiration: false,
       secretOrKey: secret,
     });

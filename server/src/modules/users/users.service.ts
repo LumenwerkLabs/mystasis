@@ -69,6 +69,7 @@ export class UsersService {
    * @param data - User creation data
    * @param data.email - Unique email address for the user
    * @param data.password - Plain text password (will be hashed)
+   * @param data.birthdate - User's date of birth
    * @param data.firstName - Optional first name
    * @param data.lastName - Optional last name
    * @param data.role - User role (defaults to PATIENT if not specified)
@@ -81,12 +82,14 @@ export class UsersService {
    * const user = await usersService.create({
    *   email: 'newuser@example.com',
    *   password: 'mySecurePassword',
+   *   birthdate: new Date('1990-01-15'),
    *   role: UserRole.CLINICIAN,
    * });
    */
   async create(data: {
     email: string;
     password: string;
+    birthdate: Date;
     firstName?: string;
     lastName?: string;
     role?: UserRole;
@@ -100,6 +103,7 @@ export class UsersService {
         data: {
           email: data.email,
           password: hashedPassword,
+          birthdate: data.birthdate,
           firstName: data.firstName,
           lastName: data.lastName,
           role: data.role,

@@ -92,6 +92,7 @@ export class AuthService {
     const user = await this.usersService.create({
       email: dto.email,
       password: dto.password,
+      birthdate: new Date(dto.birthdate),
       firstName: dto.firstName,
       lastName: dto.lastName,
       role: UserRole.PATIENT,

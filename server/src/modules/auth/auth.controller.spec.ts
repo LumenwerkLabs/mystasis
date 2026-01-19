@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ConflictException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { UserRole, User } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -60,21 +61,35 @@ interface MockAuthService {
   login: jest.Mock<Promise<AuthResponse>>;
 }
 
+// Mock Express Response for cookie operations
+interface MockResponse {
+  cookie: jest.Mock;
+  clearCookie: jest.Mock;
+}
+
 describe('AuthController', () => {
   // Controller and service will be imported dynamically
   let AuthController: new (...args: unknown[]) => unknown;
   let controller: {
-    register: (dto: {
-      email: string;
-      password: string;
-      firstName?: string;
-      lastName?: string;
-      role?: UserRole;
-    }) => Promise<AuthResponse>;
-    login: (dto: { email: string; password: string }) => Promise<AuthResponse>;
+    register: (
+      dto: {
+        email: string;
+        password: string;
+        firstName?: string;
+        lastName?: string;
+        role?: UserRole;
+      },
+      res: MockResponse,
+    ) => Promise<AuthResponse>;
+    login: (
+      dto: { email: string; password: string },
+      res: MockResponse,
+    ) => Promise<AuthResponse>;
     getProfile: (user: UserPayload) => UserPayload;
+    logout: (res: MockResponse) => { message: string };
   };
   let mockAuthService: MockAuthService;
+  let mockResponse: MockResponse;
 
   // Mock data
   const mockUserWithoutPassword: UserWithoutPassword = {
@@ -82,6 +97,7 @@ describe('AuthController', () => {
     email: 'test@example.com',
     firstName: 'John',
     lastName: 'Doe',
+    birthdate: new Date('1990-01-15'),
     role: UserRole.PATIENT,
     clinicId: null,
     createdAt: new Date('2024-01-01'),
@@ -107,6 +123,11 @@ describe('AuthController', () => {
       login: jest.fn(),
     };
 
+    mockResponse = {
+      cookie: jest.fn(),
+      clearCookie: jest.fn(),
+    };
+
     jest.clearAllMocks();
 
     // Dynamic import to allow test to exist before implementation
@@ -121,6 +142,16 @@ describe('AuthController', () => {
         controllers: [AuthController],
         providers: [
           { provide: AuthService, useValue: mockAuthService },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                if (key === 'NODE_ENV') return 'test';
+                if (key === 'auth.cookieMaxAge') return 7 * 24 * 60 * 60 * 1000;
+                return undefined;
+              }),
+            },
+          },
           Reflector,
         ],
       })
@@ -152,6 +183,7 @@ describe('AuthController', () => {
     const registerDto = {
       email: 'newuser@example.com',
       password: 'SecurePassword123!',
+      birthdate: '1990-01-15',
       firstName: 'Jane',
       lastName: 'Smith',
       role: UserRole.PATIENT,
@@ -163,7 +195,7 @@ describe('AuthController', () => {
         mockAuthService.register.mockResolvedValue(mockAuthResponse);
 
         // Act
-        await controller.register(registerDto);
+        await controller.register(registerDto, mockResponse);
 
         // Assert
         expect(mockAuthService.register).toHaveBeenCalledWith(registerDto);
@@ -174,7 +206,7 @@ describe('AuthController', () => {
         mockAuthService.register.mockResolvedValue(mockAuthResponse);
 
         // Act
-        const result = await controller.register(registerDto);
+        const result = await controller.register(registerDto, mockResponse);
 
         // Assert
         expect(result).toEqual(mockAuthResponse);
@@ -187,7 +219,7 @@ describe('AuthController', () => {
         mockAuthService.register.mockResolvedValue(mockAuthResponse);
 
         // Act
-        const result = await controller.register(registerDto);
+        const result = await controller.register(registerDto, mockResponse);
 
         // Assert
         expect(result.user).not.toHaveProperty('password');
@@ -199,6 +231,7 @@ describe('AuthController', () => {
         const minimalDto = {
           email: 'minimal@example.com',
           password: 'SecurePassword123!',
+          birthdate: '1990-01-15',
         };
         const minimalResponse: AuthResponse = {
           access_token: 'token',
@@ -207,6 +240,7 @@ describe('AuthController', () => {
             email: minimalDto.email,
             firstName: null,
             lastName: null,
+            birthdate: new Date(minimalDto.birthdate),
             role: UserRole.PATIENT,
             clinicId: null,
             createdAt: new Date(),
@@ -216,7 +250,7 @@ describe('AuthController', () => {
         mockAuthService.register.mockResolvedValue(minimalResponse);
 
         // Act
-        const result = await controller.register(minimalDto);
+        const result = await controller.register(minimalDto, mockResponse);
 
         // Assert
         expect(result).toEqual(minimalResponse);
@@ -232,7 +266,7 @@ describe('AuthController', () => {
         );
 
         // Act & Assert
-        await expect(controller.register(registerDto)).rejects.toThrow(
+        await expect(controller.register(registerDto, mockResponse)).rejects.toThrow(
           ConflictException,
         );
       });
@@ -244,7 +278,7 @@ describe('AuthController', () => {
         );
 
         // Act & Assert
-        await expect(controller.register(registerDto)).rejects.toThrow(
+        await expect(controller.register(registerDto, mockResponse)).rejects.toThrow(
           'Service unavailable',
         );
       });
@@ -292,7 +326,7 @@ describe('AuthController', () => {
         mockAuthService.login.mockResolvedValue(mockAuthResponse);
 
         // Act
-        await controller.login(loginDto);
+        await controller.login(loginDto, mockResponse);
 
         // Assert
         expect(mockAuthService.login).toHaveBeenCalledWith(loginDto);
@@ -303,7 +337,7 @@ describe('AuthController', () => {
         mockAuthService.login.mockResolvedValue(mockAuthResponse);
 
         // Act
-        const result = await controller.login(loginDto);
+        const result = await controller.login(loginDto, mockResponse);
 
         // Assert
         expect(result).toEqual(mockAuthResponse);
@@ -316,7 +350,7 @@ describe('AuthController', () => {
         mockAuthService.login.mockResolvedValue(mockAuthResponse);
 
         // Act
-        const result = await controller.login(loginDto);
+        const result = await controller.login(loginDto, mockResponse);
 
         // Assert
         expect(result.user).not.toHaveProperty('password');
@@ -331,7 +365,7 @@ describe('AuthController', () => {
         );
 
         // Act & Assert
-        await expect(controller.login(loginDto)).rejects.toThrow(
+        await expect(controller.login(loginDto, mockResponse)).rejects.toThrow(
           UnauthorizedException,
         );
       });
@@ -348,7 +382,7 @@ describe('AuthController', () => {
         };
 
         // Act & Assert
-        await expect(controller.login(wrongPasswordDto)).rejects.toThrow(
+        await expect(controller.login(wrongPasswordDto, mockResponse)).rejects.toThrow(
           UnauthorizedException,
         );
       });
@@ -358,7 +392,7 @@ describe('AuthController', () => {
         mockAuthService.login.mockRejectedValue(new Error('Database error'));
 
         // Act & Assert
-        await expect(controller.login(loginDto)).rejects.toThrow(
+        await expect(controller.login(loginDto, mockResponse)).rejects.toThrow(
           'Database error',
         );
       });
@@ -630,10 +664,13 @@ describe('AuthController', () => {
       mockAuthService.register.mockResolvedValue(mockAuthResponse);
 
       // Act
-      const result = await controller.register({
-        email: 'test@example.com',
-        password: 'password123',
-      });
+      const result = await controller.register(
+        {
+          email: 'test@example.com',
+          password: 'password123',
+        },
+        mockResponse,
+      );
 
       // Assert
       expect(result).toHaveProperty('access_token');
@@ -647,10 +684,13 @@ describe('AuthController', () => {
       mockAuthService.login.mockResolvedValue(mockAuthResponse);
 
       // Act
-      const result = await controller.login({
-        email: 'test@example.com',
-        password: 'password123',
-      });
+      const result = await controller.login(
+        {
+          email: 'test@example.com',
+          password: 'password123',
+        },
+        mockResponse,
+      );
 
       // Assert
       expect(result).toHaveProperty('access_token');

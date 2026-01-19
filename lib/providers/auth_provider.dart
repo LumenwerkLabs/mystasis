@@ -48,6 +48,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> signUp({
     required String email,
     required String password,
+    required DateTime birthdate,
     String? firstName,
     String? lastName,
   }) async {
@@ -59,6 +60,7 @@ class AuthProvider extends ChangeNotifier {
       await _authService.signUp(
         email: email,
         password: password,
+        birthdate: birthdate,
         firstName: firstName,
         lastName: lastName,
       );

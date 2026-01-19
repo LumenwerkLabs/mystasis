@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show SocketException;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:mystasis/core/services/storage_service.dart';
 
 /// Base exception for all API errors
@@ -65,6 +66,10 @@ abstract class HttpClientWrapper {
 }
 
 /// Default implementation using Dio (supports web, mobile, and desktop)
+///
+/// On web, enables `withCredentials` so the browser automatically:
+/// - Sends HttpOnly cookies with requests (for authentication)
+/// - Accepts Set-Cookie headers from the server
 class DioHttpClientWrapper implements HttpClientWrapper {
   final Dio _dio;
 
@@ -74,6 +79,8 @@ class DioHttpClientWrapper implements HttpClientWrapper {
               connectTimeout: const Duration(seconds: 30),
               receiveTimeout: const Duration(seconds: 30),
               validateStatus: (_) => true, // Handle all status codes manually
+              // Enable credentials for web (sends cookies with cross-origin requests)
+              extra: kIsWeb ? {'withCredentials': true} : null,
             ));
 
   @override
@@ -208,15 +215,23 @@ class ApiClient {
     );
   }
 
-  /// Build headers with optional auth token
+  /// Build headers with optional auth token.
+  ///
+  /// Platform-specific behavior:
+  /// - **Mobile**: Adds Authorization header with Bearer token from secure storage
+  /// - **Web**: Skips Authorization header (auth via HttpOnly cookies set by server)
   Future<Map<String, String>> _buildHeaders() async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
 
-    final token = await _storageService.getToken();
-    if (token != null && token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
+    // On web, authentication is handled via HttpOnly cookies (automatically
+    // sent by browser). On mobile, we need to add the Authorization header.
+    if (!kIsWeb) {
+      final token = await _storageService.getToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
     }
 
     return headers;

@@ -36,6 +36,12 @@ export class AuthUserDto {
   lastName: string | null;
 
   @ApiProperty({
+    description: 'User birthdate',
+    example: '1990-01-15T00:00:00.000Z',
+  })
+  birthdate: Date;
+
+  @ApiProperty({
     description: 'User role for access control',
     enum: ['PATIENT', 'CLINICIAN'],
     example: 'PATIENT',
@@ -152,6 +158,12 @@ export class UserPayloadResponseDto {
     example: 'Doe',
   })
   lastName?: string;
+
+  @ApiProperty({
+    description: 'User birthdate',
+    example: '1990-01-15T00:00:00.000Z',
+  })
+  birthdate: Date;
 
   @ApiPropertyOptional({
     description: 'Clinic ID for multi-tenancy (if assigned)',
