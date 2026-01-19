@@ -75,7 +75,7 @@ interface DateRangeOptions {
  * ```
  */
 @ApiTags('analytics')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AnalyticsController {

@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
@@ -21,7 +22,19 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
 
   // Security: Helmet middleware for security headers
-  app.use(helmet());
+  // Configure CSP to allow Swagger UI resources
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:'],
+        },
+      },
+    }),
+  );
 
   // Security: Restrictive CORS policy
   // In production, CORS_ORIGIN must be explicitly configured
@@ -33,7 +46,9 @@ async function bootstrap(): Promise<void> {
   }
 
   app.enableCors({
-    origin: corsOrigin || 'http://localhost:3000',
+    // In development, allow any origin for local testing
+    // In production, use the explicitly configured CORS_ORIGIN
+    origin: corsOrigin || true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -50,6 +65,36 @@ async function bootstrap(): Promise<void> {
   );
 
   app.useGlobalFilters(new PrismaExceptionFilter());
+
+  // OpenAPI/Swagger documentation
+  const config = new DocumentBuilder()
+    .setTitle('Mystasis API')
+    .setDescription(
+      'Longevity-focused health platform API for consolidating wearable data, ' +
+        'lab results, and clinical information with LLM-generated insights.',
+    )
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter JWT token',
+      },
+      'JWT-auth',
+    )
+    .addTag('auth', 'Authentication and user registration')
+    .addTag('health-data', 'Biomarker data management and wearable sync')
+    .addTag('alerts', 'Health alerts from biomarker threshold violations')
+    .addTag('analytics', 'Cohort-level analytics for clinicians')
+    .addTag('llm', 'LLM-generated summaries and nudges')
+    .addTag('clinics', 'Clinic management and multi-tenancy')
+    .addTag('health', 'Application health checks')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
+
   await app.listen(process.env.PORT ?? 3000);
 }
 void bootstrap();

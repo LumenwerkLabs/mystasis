@@ -10,9 +10,20 @@ import {
   ParseUUIDPipe,
   ForbiddenException,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { UserRole, Clinic } from '@prisma/client';
 import { ClinicsService, SafeUser } from './clinics.service';
 import { CreateClinicDto, UpdateClinicDto } from './dto';
+import {
+  ClinicResponseDto,
+  SafeUserResponseDto,
+} from './dto/clinic-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -40,6 +51,8 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
  * - `DELETE /clinics/:clinicId/patients/:patientId` - Unenroll patient (owner only)
  * - `GET /clinics/:clinicId/patients` - List patients (owner only)
  */
+@ApiTags('clinics')
+@ApiBearerAuth('JWT-auth')
 @Controller('clinics')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CLINICIAN)
@@ -69,6 +82,28 @@ export class ClinicsController {
    * @returns The created clinic
    */
   @Post()
+  @ApiOperation({
+    summary: 'Create a new clinic',
+    description:
+      'Creates a new clinic and automatically associates the creating clinician as the owner. Only CLINICIAN role can create clinics.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Clinic created successfully',
+    type: ClinicResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error - invalid clinic data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
   async create(
     @Body() createClinicDto: CreateClinicDto,
     @CurrentUser() user: UserPayload,
@@ -85,6 +120,24 @@ export class ClinicsController {
    * @returns Array containing only the user's own clinic, or empty array if no clinic
    */
   @Get()
+  @ApiOperation({
+    summary: 'List clinics accessible to current user',
+    description:
+      'Returns the clinician own clinic. For security, clinicians can only see their own clinic to prevent enumeration.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of accessible clinics',
+    type: [ClinicResponseDto],
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
   async findAll(@CurrentUser() user: UserPayload): Promise<Clinic[]> {
     // Security: Only return the clinician's own clinic to prevent clinic enumeration
     if (!user.clinicId) {
@@ -108,6 +161,38 @@ export class ClinicsController {
    * @throws {ForbiddenException} When user doesn't own the clinic
    */
   @Get(':id')
+  @ApiOperation({
+    summary: 'Get clinic by ID',
+    description:
+      'Retrieves clinic details by ID. Only the clinic owner can view the details.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the clinic',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clinic details',
+    type: ClinicResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic not found',
+  })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
@@ -126,6 +211,38 @@ export class ClinicsController {
    * @returns The updated clinic
    */
   @Patch(':id')
+  @ApiOperation({
+    summary: 'Update a clinic',
+    description:
+      'Updates clinic details. Only the clinic owner can update it. All fields are optional.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the clinic to update',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clinic updated successfully',
+    type: ClinicResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic ID format or validation error',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic not found',
+  })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateClinicDto: UpdateClinicDto,
@@ -144,6 +261,38 @@ export class ClinicsController {
    * @returns The deleted clinic
    */
   @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete a clinic',
+    description:
+      'Permanently deletes a clinic. Only the clinic owner can delete it. This action cannot be undone.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the clinic to delete',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Clinic deleted successfully',
+    type: ClinicResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic not found',
+  })
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
@@ -162,6 +311,44 @@ export class ClinicsController {
    * @returns The enrolled patient (without password)
    */
   @Post(':clinicId/patients/:patientId')
+  @ApiOperation({
+    summary: 'Enroll a patient in a clinic',
+    description:
+      'Enrolls a patient in the clinic. Only the clinic owner can enroll patients. Patients can only be enrolled in one clinic at a time.',
+  })
+  @ApiParam({
+    name: 'clinicId',
+    description: 'UUID of the clinic',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'patientId',
+    description: 'UUID of the patient to enroll',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Patient enrolled successfully',
+    type: SafeUserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic or patient ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic or patient not found',
+  })
   async enrollPatient(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Param('patientId', ParseUUIDPipe) patientId: string,
@@ -186,6 +373,44 @@ export class ClinicsController {
    * @returns The unenrolled patient (without password)
    */
   @Delete(':clinicId/patients/:patientId')
+  @ApiOperation({
+    summary: 'Unenroll a patient from a clinic',
+    description:
+      'Removes a patient from the clinic enrollment. Only the clinic owner can unenroll patients.',
+  })
+  @ApiParam({
+    name: 'clinicId',
+    description: 'UUID of the clinic',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'patientId',
+    description: 'UUID of the patient to unenroll',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Patient unenrolled successfully',
+    type: SafeUserResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic or patient ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic or patient not found',
+  })
   async unenrollPatient(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @Param('patientId', ParseUUIDPipe) patientId: string,
@@ -209,6 +434,38 @@ export class ClinicsController {
    * @returns Array of patients in the clinic (without passwords)
    */
   @Get(':clinicId/patients')
+  @ApiOperation({
+    summary: 'List all patients in a clinic',
+    description:
+      'Retrieves all patients enrolled in the clinic. Only the clinic owner can view the patient list.',
+  })
+  @ApiParam({
+    name: 'clinicId',
+    description: 'UUID of the clinic',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of patients enrolled in the clinic',
+    type: [SafeUserResponseDto],
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid clinic ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - must be clinic owner',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Clinic not found',
+  })
   async getPatients(
     @Param('clinicId', ParseUUIDPipe) clinicId: string,
     @CurrentUser() user: UserPayload,

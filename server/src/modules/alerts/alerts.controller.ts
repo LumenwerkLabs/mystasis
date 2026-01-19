@@ -10,6 +10,13 @@ import {
   ForbiddenException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 import { AlertsService } from './alerts.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
@@ -32,6 +39,8 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
  * Alerts are generated when biomarker values exceed defined thresholds.
  * They follow a status flow: ACTIVE -> ACKNOWLEDGED -> RESOLVED or DISMISSED
  */
+@ApiTags('alerts')
+@ApiBearerAuth('JWT-auth')
 @Controller('alerts')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AlertsController {
@@ -92,6 +101,33 @@ export class AlertsController {
    */
   @Get(':userId')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get paginated alerts for a user',
+    description:
+      'Retrieves alerts with optional filtering by status, severity, and pagination. Patients can only access their own alerts; clinicians can access any patient alerts.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'UUID of the user whose alerts to retrieve',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of alerts',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid userId format or query parameters',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user alerts',
+  })
   async getAlerts(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Query() query: GetAlertsQueryDto,
@@ -125,6 +161,33 @@ export class AlertsController {
    */
   @Get(':userId/active')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get active alerts for a user',
+    description:
+      'Retrieves only active (unresolved) alerts for a user. Patients can only access their own alerts.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'UUID of the user whose active alerts to retrieve',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of active alerts',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid userId format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user alerts',
+  })
   async getActiveAlerts(
     @Param('userId', ParseUUIDPipe) userId: string,
     @CurrentUser() user: UserPayload,
@@ -149,6 +212,37 @@ export class AlertsController {
    */
   @Get('detail/:id')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get a single alert by ID',
+    description:
+      'Retrieves a single alert by its ID. Patients can only access their own alerts.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the alert to retrieve',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert details',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid alert ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user alert',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Alert not found',
+  })
   async getAlert(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
@@ -166,6 +260,27 @@ export class AlertsController {
    */
   @Post()
   @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Create a new health alert',
+    description:
+      'Creates a new health alert for a user. Only accessible by clinicians. Alerts are typically created when biomarker values exceed thresholds.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Alert created successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error - invalid alert data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
   async createAlert(@Body() dto: CreateAlertDto) {
     return this.alertsService.create({
       userId: dto.userId,
@@ -193,6 +308,37 @@ export class AlertsController {
    */
   @Patch(':id/acknowledge')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Acknowledge an alert',
+    description:
+      'Marks an alert as acknowledged (status: ACKNOWLEDGED). Patients can only acknowledge their own alerts.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the alert to acknowledge',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert acknowledged successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid alert ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot acknowledge other user alert',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Alert not found',
+  })
   async acknowledgeAlert(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
@@ -217,6 +363,37 @@ export class AlertsController {
    */
   @Patch(':id/dismiss')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Dismiss an alert',
+    description:
+      'Marks an alert as dismissed (status: DISMISSED). Patients can only dismiss their own alerts.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the alert to dismiss',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert dismissed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid alert ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot dismiss other user alert',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Alert not found',
+  })
   async dismissAlert(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
@@ -238,6 +415,37 @@ export class AlertsController {
    */
   @Patch(':id/resolve')
   @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Resolve an alert',
+    description:
+      'Marks an alert as resolved (status: RESOLVED). Only accessible by clinicians. This indicates the underlying issue has been addressed.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the alert to resolve',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Alert resolved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid alert ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Alert not found',
+  })
   async resolveAlert(@Param('id', ParseUUIDPipe) id: string) {
     return this.alertsService.resolve(id);
   }

@@ -11,6 +11,14 @@ import {
   ParseUUIDPipe,
   ParseEnumPipe,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { BiomarkerType, UserRole } from '@prisma/client';
 import { HealthDataService } from './health-data.service';
 import { CreateBiomarkerDto } from './dto/create-biomarker.dto';
@@ -35,6 +43,8 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
  * All biomarker data is considered PHI under HIPAA. Access is restricted
  * to authorized users and logged for audit purposes.
  */
+@ApiTags('health-data')
+@ApiBearerAuth('JWT-auth')
 @Controller('health-data')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class HealthDataController {
@@ -71,6 +81,33 @@ export class HealthDataController {
    */
   @Get('biomarkers/:userId')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get paginated biomarkers for a user',
+    description:
+      'Retrieves biomarker values with optional filtering by type, date range, and pagination. Patients can only access their own data; clinicians can access any patient data.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'UUID of the user whose biomarkers to retrieve',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of biomarkers',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid userId format or query parameters',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user data',
+  })
   async getBiomarkers(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Query() query: GetBiomarkersQueryDto,
@@ -97,6 +134,27 @@ export class HealthDataController {
    */
   @Post('biomarkers')
   @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Create a single biomarker entry',
+    description:
+      'Creates a new biomarker value for a user. Only accessible by clinicians. All biomarker data is PHI under HIPAA.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Biomarker created successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validation error - invalid biomarker data',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
   async createBiomarker(@Body() dto: CreateBiomarkerDto) {
     return this.healthDataService.create({
       userId: dto.userId,
@@ -120,6 +178,38 @@ export class HealthDataController {
    */
   @Post('sync')
   @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Batch sync biomarkers from wearable devices',
+    description:
+      'Creates multiple biomarker entries in a single operation. Optimized for wearable device data sync (Apple Health, Fitbit, etc.). Only accessible by clinicians. Max 1000 biomarkers per request.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Biomarkers synced successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of biomarkers created',
+          example: 150,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation error - invalid data or exceeds 1000 biomarker limit',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
   async syncWearableData(@Body() dto: WearableSyncDto) {
     const biomarkersToCreate = dto.biomarkers.map((biomarker) => ({
       userId: dto.userId,
@@ -148,6 +238,38 @@ export class HealthDataController {
    */
   @Get('biomarkers/:userId/latest/:type')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get the latest biomarker of a specific type',
+    description:
+      'Retrieves the most recent biomarker value of the specified type for a user. Patients can only access their own data.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'UUID of the user',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'type',
+    description: 'Biomarker type to retrieve',
+    enum: BiomarkerType,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Latest biomarker value (or null if none exists)',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid userId format or biomarker type',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user data',
+  })
   async getLatestBiomarker(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('type', new ParseEnumPipe(BiomarkerType)) type: BiomarkerType,
@@ -175,6 +297,38 @@ export class HealthDataController {
    */
   @Get('biomarkers/:userId/trend/:type')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Get biomarker trend data within a date range',
+    description:
+      'Retrieves biomarker values for trend analysis within the specified date range, ordered by timestamp ascending. Patients can only access their own data.',
+  })
+  @ApiParam({
+    name: 'userId',
+    description: 'UUID of the user',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiParam({
+    name: 'type',
+    description: 'Biomarker type to analyze',
+    enum: BiomarkerType,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of biomarker values for trend analysis',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid userId, biomarker type, or date range',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - patient cannot access other user data',
+  })
   async getTrendData(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('type', new ParseEnumPipe(BiomarkerType)) type: BiomarkerType,
@@ -201,6 +355,37 @@ export class HealthDataController {
    */
   @Delete('biomarkers/:id')
   @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Delete a biomarker entry',
+    description:
+      'Permanently deletes a biomarker value. Only accessible by clinicians. This action cannot be undone.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID of the biomarker to delete',
+    type: String,
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Biomarker deleted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid biomarker ID format',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - CLINICIAN role required',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Biomarker not found',
+  })
   async deleteBiomarker(@Param('id', ParseUUIDPipe) id: string) {
     return this.healthDataService.remove(id);
   }

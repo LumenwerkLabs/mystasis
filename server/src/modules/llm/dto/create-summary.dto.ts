@@ -1,4 +1,5 @@
 import { IsEnum, IsNotEmpty } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
 import { SummaryType } from '@prisma/client';
 
 /**
@@ -25,6 +26,12 @@ export class CreateSummaryDto {
    * - WELLNESS_NUDGE: Motivational wellness message
    * - CLINICIAN_REPORT: Detailed report for clinicians
    */
+  @ApiProperty({
+    description: 'Type of summary to generate',
+    enum: SummaryType,
+    example: 'WEEKLY_SUMMARY',
+    enumName: 'SummaryType',
+  })
   @IsNotEmpty()
   @IsEnum(SummaryType)
   summaryType: SummaryType;

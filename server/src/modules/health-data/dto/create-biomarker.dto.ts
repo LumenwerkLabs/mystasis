@@ -1,4 +1,5 @@
 import { IsOptional, IsUUID } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { InputJsonValue } from '@prisma/client/runtime/library';
 import { BaseBiomarkerDto } from './base-biomarker.dto';
 
@@ -9,9 +10,18 @@ import { BaseBiomarkerDto } from './base-biomarker.dto';
  * All biomarker data is considered PHI under HIPAA.
  */
 export class CreateBiomarkerDto extends BaseBiomarkerDto {
+  @ApiProperty({
+    description: 'UUID of the user this biomarker belongs to',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    format: 'uuid',
+  })
   @IsUUID()
   userId: string;
 
+  @ApiPropertyOptional({
+    description: 'Additional metadata for the biomarker (JSON object)',
+    example: { device: 'Apple Watch Series 9', firmware: '10.2' },
+  })
   @IsOptional()
   metadata?: InputJsonValue;
 }
