@@ -12,65 +12,35 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  DateTime? _dateOfBirth;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _selectDateOfBirth() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dateOfBirth ?? DateTime(now.year - 25),
-      firstDate: DateTime(1900),
-      lastDate: now,
-      helpText: 'Select your date of birth',
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: MystasisTheme.deepBioTeal,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null) {
-      setState(() => _dateOfBirth = picked);
-    }
-  }
-
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
-
-    if (_dateOfBirth == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select your date of birth')),
-      );
-      return;
-    }
 
     final authProvider = context.read<AuthProvider>();
     final success = await authProvider.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      name: _nameController.text.trim(),
-      dateOfBirth: _dateOfBirth!,
+      firstName: _firstNameController.text.trim(),
+      lastName: _lastNameController.text.trim().isNotEmpty
+          ? _lastNameController.text.trim()
+          : null,
     );
 
     if (success && mounted) {
@@ -78,22 +48,21 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  String _formatDate(DateTime date) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  /// Validate password: 8+ chars, at least 1 letter and 1 number
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a password';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    if (!RegExp(r'[a-zA-Z]').hasMatch(value)) {
+      return 'Password must contain at least one letter';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(value)) {
+      return 'Password must contain at least one number';
+    }
+    return null;
   }
 
   @override
@@ -171,24 +140,36 @@ class _SignupScreenState extends State<SignupScreen> {
                       },
                     ),
 
-                    // Name Field
+                    // First Name Field
                     TextFormField(
-                      controller: _nameController,
+                      controller: _firstNameController,
                       textInputAction: TextInputAction.next,
                       textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
-                        labelText: 'Full Name',
+                        labelText: 'First Name',
                         prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
+                          return 'Please enter your first name';
                         }
                         if (value.trim().length < 2) {
                           return 'Name must be at least 2 characters';
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Last Name Field
+                    TextFormField(
+                      controller: _lastNameController,
+                      textInputAction: TextInputAction.next,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: const InputDecoration(
+                        labelText: 'Last Name (optional)',
+                        prefixIcon: Icon(Icons.person_outline),
+                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -215,33 +196,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Date of Birth
-                    GestureDetector(
-                      onTap: _selectDateOfBirth,
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Date of Birth',
-                          prefixIcon: const Icon(Icons.calendar_today_outlined),
-                          suffixIcon: const Icon(Icons.arrow_drop_down),
-                          errorText: null,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Text(
-                          _dateOfBirth != null
-                              ? _formatDate(_dateOfBirth!)
-                              : 'Select date',
-                          style: _dateOfBirth != null
-                              ? Theme.of(context).textTheme.bodyLarge
-                              : Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: MystasisTheme.neutralGrey,
-                                ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
                     // Password Field
                     TextFormField(
                       controller: _passwordController,
@@ -250,6 +204,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       decoration: InputDecoration(
                         labelText: 'Password',
                         prefixIcon: const Icon(Icons.lock_outline),
+                        helperText: '8+ characters, with letter and number',
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
@@ -261,15 +216,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter a password';
-                        }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-                        return null;
-                      },
+                      validator: _validatePassword,
                     ),
                     const SizedBox(height: 16),
 

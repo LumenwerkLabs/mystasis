@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
-import 'package:mystasis/firebase_options.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/screens/auth/login_screen.dart';
 import 'package:mystasis/screens/auth/signup_screen.dart';
@@ -11,7 +9,6 @@ import 'package:mystasis/screens/dashboard/clinician_dashboard.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MystasisApp());
 }
 
@@ -40,11 +37,40 @@ class MystasisApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthStatus();
+  }
+
+  Future<void> _checkAuthStatus() async {
+    final authProvider = context.read<AuthProvider>();
+    await authProvider.checkAuthStatus();
+    if (mounted) {
+      setState(() => _isCheckingAuth = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isCheckingAuth) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         if (auth.isAuthenticated) {
