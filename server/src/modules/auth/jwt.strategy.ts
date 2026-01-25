@@ -5,6 +5,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { UserRole } from '@prisma/client';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AUTH_COOKIE_NAME } from '../../common/services/cookie.service';
 
 /**
  * JWT payload structure from token.
@@ -19,19 +20,13 @@ interface JwtPayload {
 }
 
 /**
- * Cookie name for storing JWT token.
- * Used by web clients with HttpOnly cookies for XSS protection.
- */
-export const JWT_COOKIE_NAME: string = 'access_token';
-
-/**
  * Extracts JWT token from either HttpOnly cookie or Authorization header.
  * Prioritizes cookie for web clients, falls back to header for mobile clients.
  */
 function extractJwtFromCookieOrHeader(req: Request): string | null {
   // First, try to extract from HttpOnly cookie (web clients)
-  if (req.cookies && req.cookies[JWT_COOKIE_NAME]) {
-    return req.cookies[JWT_COOKIE_NAME];
+  if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
+    return req.cookies[AUTH_COOKIE_NAME];
   }
   // Fall back to Authorization header (mobile clients)
   return ExtractJwt.fromAuthHeaderAsBearerToken()(req);

@@ -6,6 +6,7 @@ import { PrismaService } from '../../core/prisma/prisma.service';
 import { HealthDataService } from '../health-data/health-data.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { CommonModule } from '../../common/common.module';
 
 /**
  * TDD Tests for LlmModule
@@ -75,6 +76,7 @@ describe('LlmModule', () => {
       try {
         module = await Test.createTestingModule({
           imports: [
+            CommonModule,
             PrismaModule,
             LlmModule,
             ConfigModule.forRoot({
@@ -170,6 +172,7 @@ describe('LlmModule', () => {
       try {
         const module = await Test.createTestingModule({
           imports: [
+            CommonModule,
             PrismaModule,
             LlmModule,
             ConfigModule.forRoot({
@@ -180,6 +183,10 @@ describe('LlmModule', () => {
                     apiUrl: 'test',
                     apiKey: 'test',
                     model: 'test',
+                  },
+                  auth: {
+                    jwtSecret: 'test-secret-key-for-testing-purposes-only',
+                    jwtExpiration: 86400,
                   },
                 }),
               ],

@@ -9,6 +9,7 @@ import {
 import { Observable, firstValueFrom } from 'rxjs';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { HealthDataService } from '../health-data/health-data.service';
+import { OpenMedService } from '../openmed/openmed.service';
 
 /**
  * HTTP Service injection token for dependency injection.
@@ -104,6 +105,31 @@ interface ResponseOptions {
 }
 
 /**
+ * Result of de-identification operation.
+ *
+ * @property text - The processed text (de-identified or original)
+ * @property deidentified - Whether de-identification was successfully applied
+ */
+interface DeidentificationResult {
+  text: string;
+  deidentified: boolean;
+}
+
+/**
+ * HIPAA audit log entry structure for de-identification operations.
+ */
+interface DeidentificationAuditLog {
+  action: 'DEIDENTIFY_CLINICAL_NOTES';
+  timestamp: string;
+  userId?: string;
+  requestId: string;
+  success: boolean;
+  entityTypesDetected?: string[];
+  entitiesRedacted?: number;
+  errorType?: string;
+}
+
+/**
  * LLM-powered health insights generation service.
  *
  * @description Generates personalized health summaries and wellness nudges using
@@ -161,6 +187,7 @@ export class LlmService {
     private readonly configService: ConfigService,
     private readonly healthDataService: HealthDataService,
     private readonly prisma: PrismaService,
+    private readonly openMedService: OpenMedService,
   ) {}
 
   // ============================================
@@ -625,6 +652,195 @@ Respond in JSON format with: summary, flags (array), recommendations (array), qu
    */
   private buildNudgeUserPrompt(biomarkerData: BiomarkerValue[]): string {
     return `Based on recent biomarker trends: ${JSON.stringify(biomarkerData.slice(-5))}, generate a brief, encouraging wellness nudge.`;
+  }
+
+  // ============================================
+  // PII DE-IDENTIFICATION
+  // ============================================
+
+  /**
+   * Generates a unique request ID for audit logging.
+   */
+  private generateRequestId(): string {
+    return `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * Logs a HIPAA-compliant audit entry for de-identification operations.
+   *
+   * @param auditEntry - The audit log entry to record
+   */
+  private logDeidentificationAudit(auditEntry: DeidentificationAuditLog): void {
+    // Use structured logging for easy parsing by log aggregation tools
+    this.logger.log(`HIPAA_AUDIT: ${JSON.stringify(auditEntry)}`);
+  }
+
+  /**
+   * De-identifies clinical notes before LLM processing.
+   *
+   * @description Uses OpenMed to detect and redact personally identifiable
+   * information (PII) from clinical notes before sending them to the LLM API.
+   * This ensures HIPAA compliance by preventing PHI from being sent to external
+   * AI services.
+   *
+   * **Supported PII Types:**
+   * - Names (patient, doctor, family members)
+   * - Dates (DOB, appointment dates)
+   * - SSN, MRN, and other identifiers
+   * - Phone numbers, email addresses
+   * - Addresses and locations
+   *
+   * **HIPAA Audit Trail:**
+   * All de-identification operations are logged with structured audit entries
+   * including userId (if provided), requestId, entity types, and success status.
+   *
+   * @param clinicalNotes - Raw clinical notes potentially containing PII
+   * @param userId - Optional user ID for audit trail (recommended for HIPAA compliance)
+   * @returns Object containing the processed text and a flag indicating whether
+   *          de-identification was successful. Callers should check the `deidentified`
+   *          flag to decide whether to include the notes in LLM prompts.
+   *
+   * @example
+   * const result = await this.deidentifyClinicalNotes(
+   *   'Patient John Smith (DOB: 01/15/1980) reported chest pain.',
+   *   'user-123'
+   * );
+   * // Returns: { text: "Patient [NAME] (DOB: [DATE]) reported chest pain.", deidentified: true }
+   *
+   * @example
+   * // When de-identification fails
+   * const result = await this.deidentifyClinicalNotes('Some clinical notes', 'user-123');
+   * // Returns: { text: "", deidentified: false } (empty string to prevent PHI leakage)
+   */
+  async deidentifyClinicalNotes(
+    clinicalNotes: string,
+    userId?: string,
+  ): Promise<DeidentificationResult> {
+    const requestId = this.generateRequestId();
+
+    try {
+      const response = await this.openMedService.deidentify({
+        text: clinicalNotes,
+      });
+
+      // Check if actual de-identification occurred (not passthrough)
+      const wasDeidentified = response.method !== 'passthrough';
+
+      // Extract entity types for audit log (NEVER log actual PII values)
+      const entityTypes = [
+        ...new Set(response.piiEntities.map((e) => e.entityType)),
+      ];
+
+      // Log HIPAA audit entry
+      this.logDeidentificationAudit({
+        action: 'DEIDENTIFY_CLINICAL_NOTES',
+        timestamp: new Date().toISOString(),
+        userId,
+        requestId,
+        success: wasDeidentified,
+        entityTypesDetected: entityTypes,
+        entitiesRedacted: response.numEntitiesRedacted,
+      });
+
+      if (!wasDeidentified) {
+        this.logger.warn(
+          'OpenMed service returned passthrough response - de-identification not applied',
+          { requestId, userId },
+        );
+      }
+
+      return {
+        text: response.deidentifiedText,
+        deidentified: wasDeidentified,
+      };
+    } catch (error) {
+      const errorType =
+        error instanceof Error ? error.constructor.name : 'Unknown';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+
+      // Log HIPAA audit entry for failure
+      this.logDeidentificationAudit({
+        action: 'DEIDENTIFY_CLINICAL_NOTES',
+        timestamp: new Date().toISOString(),
+        userId,
+        requestId,
+        success: false,
+        errorType,
+      });
+
+      this.logger.error('PII de-identification failed', {
+        requestId,
+        userId,
+        errorType,
+        errorMessage,
+      });
+
+      // Return empty string to prevent PHI leakage (NOT original text)
+      return {
+        text: '',
+        deidentified: false,
+      };
+    }
+  }
+
+  /**
+   * Builds a user prompt with de-identified clinical notes for LLM analysis.
+   *
+   * @description Combines biomarker data with de-identified clinical notes
+   * to create a comprehensive prompt for LLM analysis. Clinical notes are
+   * automatically de-identified using OpenMed before being included.
+   *
+   * **Safety:** If de-identification fails, clinical notes are NOT included
+   * in the prompt to prevent PII leakage to external LLM services.
+   *
+   * @param biomarkerData - Array of biomarker values to include
+   * @param clinicalNotes - Optional clinical notes (will be de-identified)
+   * @param userId - Optional user ID for HIPAA audit trail
+   * @returns Formatted user prompt string with de-identified clinical context
+   *
+   * @example
+   * const prompt = await this.buildUserPromptWithClinicalNotes(
+   *   biomarkers,
+   *   'Patient John Smith reported fatigue and weight gain.',
+   *   'user-123'
+   * );
+   * // Returns prompt with "[NAME]" instead of "John Smith"
+   *
+   * @example
+   * // When de-identification fails, notes are omitted for safety
+   * const prompt = await this.buildUserPromptWithClinicalNotes(
+   *   biomarkers,
+   *   'Patient notes here',
+   *   'user-123'
+   * );
+   * // If de-identification fails, returns prompt WITHOUT clinical notes
+   */
+  async buildUserPromptWithClinicalNotes(
+    biomarkerData: BiomarkerValue[],
+    clinicalNotes?: string,
+    userId?: string,
+  ): Promise<string> {
+    const recentData = biomarkerData.slice(-10);
+    let prompt = `Analyze the following biomarker trend data and provide insights:\n${JSON.stringify(recentData, null, 2)}`;
+
+    if (clinicalNotes) {
+      // De-identify clinical notes before including in prompt
+      const result = await this.deidentifyClinicalNotes(clinicalNotes, userId);
+
+      if (result.deidentified && result.text) {
+        // Only include notes if de-identification was successful and text is non-empty
+        prompt += `\n\nClinical Context (de-identified):\n${result.text}`;
+      } else {
+        // Log warning and exclude notes to prevent PII leakage
+        this.logger.warn(
+          'Clinical notes excluded from LLM prompt due to de-identification failure',
+          { userId },
+        );
+      }
+    }
+
+    return prompt;
   }
 
   // ============================================

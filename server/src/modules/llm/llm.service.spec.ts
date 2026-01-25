@@ -12,6 +12,7 @@ import { of, throwError } from 'rxjs';
 import { LlmService } from './llm.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { HealthDataService } from '../health-data/health-data.service';
+import { OpenMedService } from '../openmed/openmed.service';
 
 /**
  * TDD Tests for LlmService
@@ -62,6 +63,12 @@ interface MockPrismaService {
   user: MockUserDelegate;
 }
 
+interface MockOpenMedService {
+  deidentifyText: jest.Mock;
+  deidentify: jest.Mock;
+  isAvailable: jest.Mock;
+}
+
 // Mock response type that mirrors Axios structure
 interface MockAxiosResponse {
   data: {
@@ -100,6 +107,7 @@ describe('LlmService', () => {
   let mockConfigService: MockConfigService;
   let mockHealthDataService: MockHealthDataService;
   let mockPrismaService: MockPrismaService;
+  let mockOpenMedService: MockOpenMedService;
 
   // Mock user data
   const mockUser = {
@@ -228,6 +236,23 @@ describe('LlmService', () => {
       },
     };
 
+    mockOpenMedService = {
+      deidentifyText: jest
+        .fn()
+        .mockImplementation((text: string) => Promise.resolve(text)),
+      deidentify: jest.fn().mockImplementation((request: { text: string }) =>
+        Promise.resolve({
+          originalText: request.text,
+          deidentifiedText: request.text,
+          piiEntities: [],
+          method: 'passthrough',
+          timestamp: new Date().toISOString(),
+          numEntitiesRedacted: 0,
+        }),
+      ),
+      isAvailable: jest.fn().mockResolvedValue(true),
+    };
+
     jest.clearAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -248,6 +273,10 @@ describe('LlmService', () => {
         {
           provide: PrismaService,
           useValue: mockPrismaService,
+        },
+        {
+          provide: OpenMedService,
+          useValue: mockOpenMedService,
         },
       ],
     }).compile();

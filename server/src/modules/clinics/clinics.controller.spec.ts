@@ -5,6 +5,7 @@ import { UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { CookieService } from '../../common/services/cookie.service';
 
 /**
  * TDD Tests for ClinicsController
@@ -94,9 +95,21 @@ interface UpdateClinicDto {
   phone?: string;
 }
 
+// Define CreateClinicResponse interface
+interface CreateClinicResponse {
+  clinic: Clinic;
+  accessToken: string;
+  tokenType: string;
+}
+
+// Define mock Response interface
+interface MockResponse {
+  cookie: jest.Mock;
+}
+
 // Define mock ClinicsService interface
 interface MockClinicsService {
-  create: jest.Mock<Promise<Clinic>, [CreateClinicDto, string]>;
+  create: jest.Mock<Promise<CreateClinicResponse>, [CreateClinicDto, string]>;
   findAll: jest.Mock<Promise<Clinic[]>>;
   findOne: jest.Mock<Promise<Clinic>>;
   update: jest.Mock<Promise<Clinic>>;
@@ -110,7 +123,11 @@ describe('ClinicsController', () => {
   // Controller and service will be imported dynamically
   let ClinicsController: new (...args: unknown[]) => unknown;
   let controller: {
-    create: (dto: CreateClinicDto, user: UserPayload) => Promise<Clinic>;
+    create: (
+      dto: CreateClinicDto,
+      user: UserPayload,
+      res: MockResponse,
+    ) => Promise<CreateClinicResponse>;
     findAll: (user: UserPayload) => Promise<Clinic[]>;
     findOne: (id: string, user: UserPayload) => Promise<Clinic>;
     update: (
@@ -132,6 +149,11 @@ describe('ClinicsController', () => {
     getPatients: (clinicId: string, user: UserPayload) => Promise<SafeUser[]>;
   };
   let mockClinicsService: MockClinicsService;
+  let mockResponse: MockResponse;
+  let mockCookieService: {
+    setAuthCookie: jest.Mock;
+    clearAuthCookie: jest.Mock;
+  };
 
   // Mock data
   const mockClinician: UserPayload = {
@@ -204,7 +226,18 @@ describe('ClinicsController', () => {
       getPatients: jest.fn(),
     };
 
+    // Mock Express Response for cookie setting
+    mockResponse = {
+      cookie: jest.fn(),
+    };
+
     jest.clearAllMocks();
+
+    // Mock CookieService
+    mockCookieService = {
+      setAuthCookie: jest.fn(),
+      clearAuthCookie: jest.fn(),
+    };
 
     // Dynamic import to allow test to exist before implementation
     try {
@@ -218,6 +251,7 @@ describe('ClinicsController', () => {
         controllers: [ClinicsController],
         providers: [
           { provide: ClinicsService, useValue: mockClinicsService },
+          { provide: CookieService, useValue: mockCookieService },
           Reflector,
         ],
       })
@@ -281,13 +315,19 @@ describe('ClinicsController', () => {
       phone: '+1-555-0100',
     };
 
+    const mockCreateResponse: CreateClinicResponse = {
+      clinic: mockClinic,
+      accessToken: 'mock-jwt-token',
+      tokenType: 'Bearer',
+    };
+
     describe('happy path', () => {
       it('should call clinicsService.create with correct data and clinician ID', async () => {
         // Arrange
-        mockClinicsService.create.mockResolvedValue(mockClinic);
+        mockClinicsService.create.mockResolvedValue(mockCreateResponse);
 
         // Act
-        await controller.create(createDto, mockClinician);
+        await controller.create(createDto, mockClinician, mockResponse);
 
         // Assert
         expect(mockClinicsService.create).toHaveBeenCalledWith(
@@ -300,16 +340,36 @@ describe('ClinicsController', () => {
         );
       });
 
-      it('should return created clinic', async () => {
+      it('should return created clinic with access token', async () => {
         // Arrange
-        mockClinicsService.create.mockResolvedValue(mockClinic);
+        mockClinicsService.create.mockResolvedValue(mockCreateResponse);
 
         // Act
-        const result = await controller.create(createDto, mockClinician);
+        const result = await controller.create(
+          createDto,
+          mockClinician,
+          mockResponse,
+        );
 
         // Assert
-        expect(result).toEqual(mockClinic);
-        expect(result.id).toBe(mockClinic.id);
+        expect(result.clinic).toEqual(mockClinic);
+        expect(result.clinic.id).toBe(mockClinic.id);
+        expect(result.accessToken).toBe('mock-jwt-token');
+        expect(result.tokenType).toBe('Bearer');
+      });
+
+      it('should set HttpOnly cookie with access token via CookieService', async () => {
+        // Arrange
+        mockClinicsService.create.mockResolvedValue(mockCreateResponse);
+
+        // Act
+        await controller.create(createDto, mockClinician, mockResponse);
+
+        // Assert
+        expect(mockCookieService.setAuthCookie).toHaveBeenCalledWith(
+          mockResponse,
+          'mock-jwt-token',
+        );
       });
 
       it('should handle optional fields', async () => {
@@ -321,13 +381,22 @@ describe('ClinicsController', () => {
           address: null,
           phone: null,
         };
-        mockClinicsService.create.mockResolvedValue(minimalClinic);
+        const minimalResponse: CreateClinicResponse = {
+          clinic: minimalClinic,
+          accessToken: 'mock-jwt-token',
+          tokenType: 'Bearer',
+        };
+        mockClinicsService.create.mockResolvedValue(minimalResponse);
 
         // Act
-        const result = await controller.create(minimalDto, mockClinician);
+        const result = await controller.create(
+          minimalDto,
+          mockClinician,
+          mockResponse,
+        );
 
         // Assert
-        expect(result.name).toBe('Minimal Clinic');
+        expect(result.clinic.name).toBe('Minimal Clinic');
       });
     });
 
@@ -381,7 +450,7 @@ describe('ClinicsController', () => {
 
         // Act & Assert
         await expect(
-          controller.create(createDto, mockClinician),
+          controller.create(createDto, mockClinician, mockResponse),
         ).rejects.toThrow('Database error');
       });
     });

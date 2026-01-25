@@ -34,6 +34,42 @@ services:
       - mystasis-network
 
   # ===========================================
+  # OpenMed PII De-identification Service
+  # ===========================================
+  # NOTE: Before building, copy OpenMed library to openmed-service/openmed-lib/
+  #       cp -r ../openmed openmed-service/openmed-lib
+  openmed:
+    build:
+      context: ./openmed-service
+      dockerfile: Dockerfile
+    container_name: mystasis-openmed
+    restart: unless-stopped
+    environment:
+      # API key for authentication (generate a secure random key for production)
+      OPENMED_API_KEY: ${OPENMED_API_KEY:-}
+      # Preload model on startup for faster first request (uses more memory)
+      OPENMED_PRELOAD: ${OPENMED_PRELOAD:-false}
+    # Development: exposed to host for testing
+    # Production: change to 'expose: ["8001"]' for security (internal only)
+    ports:
+      - "${OPENMED_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - mystasis-network
+    # Resource limits to prevent OOM
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ===========================================
   # NestJS API Server
   # ===========================================
   api:
@@ -45,6 +81,8 @@ services:
     restart: unless-stopped
     depends_on:
       db:
+        condition: service_healthy
+      openmed:
         condition: service_healthy
     environment:
       # Database
@@ -62,6 +100,13 @@ services:
       LLM_API_URL: ${LLM_API_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+
+      # OpenMed PII De-identification Service
+      OPENMED_SERVICE_URL: http://openmed:8001
+      OPENMED_API_KEY: ${OPENMED_API_KEY:-}
+      OPENMED_ENABLED: ${OPENMED_ENABLED:-true}
+      # In production, passthrough should be false to prevent PHI leakage
+      OPENMED_ALLOW_PASSTHROUGH: ${OPENMED_ALLOW_PASSTHROUGH:-false}
 
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-log}

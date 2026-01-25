@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { UserRole, Clinic } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateClinicDto, UpdateClinicDto } from './dto';
@@ -40,6 +41,15 @@ const SAFE_USER_SELECT = {
 } as const;
 
 /**
+ * Response for clinic creation including new access token.
+ */
+export interface CreateClinicResponse {
+  clinic: Clinic;
+  accessToken: string;
+  tokenType: string;
+}
+
+/**
  * Service for managing clinics in the Mystasis platform.
  *
  * @description
@@ -53,21 +63,24 @@ const SAFE_USER_SELECT = {
  */
 @Injectable()
 export class ClinicsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   /**
    * Creates a new clinic and associates the creating clinician with it.
    *
    * @param createClinicDto - The clinic creation data
    * @param clinicianId - The ID of the clinician creating the clinic
-   * @returns The created clinic
+   * @returns The created clinic and a new access token with updated clinicId
    */
   async create(
     createClinicDto: CreateClinicDto,
     clinicianId: string,
-  ): Promise<Clinic> {
-    return this.prisma.$transaction(async (tx) => {
-      const clinic = await tx.clinic.create({
+  ): Promise<CreateClinicResponse> {
+    const { clinic, user } = await this.prisma.$transaction(async (tx) => {
+      const createdClinic = await tx.clinic.create({
         data: {
           name: createClinicDto.name,
           address: createClinicDto.address,
@@ -75,14 +88,35 @@ export class ClinicsService {
         },
       });
 
-      // Associate the creating clinician with this clinic
-      await tx.user.update({
+      // Associate the creating clinician with this clinic and return updated user
+      const updatedUser = await tx.user.update({
         where: { id: clinicianId },
-        data: { clinicId: clinic.id },
+        data: { clinicId: createdClinic.id },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          clinicId: true,
+        },
       });
 
-      return clinic;
+      return { clinic: createdClinic, user: updatedUser };
     });
+
+    // Generate new JWT with updated clinicId so client has immediate access
+    const payload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      clinicId: user.clinicId,
+    };
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return {
+      clinic,
+      accessToken,
+      tokenType: 'Bearer',
+    };
   }
 
   /**

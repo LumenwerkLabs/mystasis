@@ -8,7 +8,6 @@ import {
   ApiCookieAuth,
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -20,7 +19,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
 import { Throttle } from '../../common/decorators/throttle.decorator';
-import { JWT_COOKIE_NAME } from './jwt.strategy';
+import { CookieService } from '../../common/services/cookie.service';
 
 /**
  * AuthController - HTTP layer for authentication endpoints.
@@ -53,39 +52,8 @@ import { JWT_COOKIE_NAME } from './jwt.strategy';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly configService: ConfigService,
+    private readonly cookieService: CookieService,
   ) {}
-
-  /**
-   * Sets HttpOnly cookie with JWT token for web clients.
-   * Cookie settings are configured for security (HttpOnly, Secure in production, SameSite).
-   */
-  private setAuthCookie(res: Response, token: string): void {
-    const isProduction = this.configService.get('NODE_ENV') === 'production';
-    const maxAge =
-      this.configService.get<number>('auth.cookieMaxAge') ||
-      7 * 24 * 60 * 60 * 1000; // 7 days default
-
-    res.cookie(JWT_COOKIE_NAME, token, {
-      httpOnly: true, // Prevents JavaScript access (XSS protection)
-      secure: isProduction, // HTTPS only in production
-      sameSite: 'strict', // CSRF protection
-      maxAge,
-      path: '/', // Cookie available for all paths
-    });
-  }
-
-  /**
-   * Clears the auth cookie (for logout).
-   */
-  private clearAuthCookie(res: Response): void {
-    res.clearCookie(JWT_COOKIE_NAME, {
-      httpOnly: true,
-      secure: this.configService.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
-      path: '/',
-    });
-  }
 
   /**
    * Registers a new user.
@@ -135,7 +103,7 @@ export class AuthController {
   ): Promise<{ access_token: string; user: unknown }> {
     const result = await this.authService.register(dto);
     // Set HttpOnly cookie for web clients (mobile clients use the token from body)
-    this.setAuthCookie(res, result.access_token);
+    this.cookieService.setAuthCookie(res, result.access_token);
     return result;
   }
 
@@ -182,7 +150,7 @@ export class AuthController {
   ): Promise<{ access_token: string; user: unknown }> {
     const result = await this.authService.login(dto);
     // Set HttpOnly cookie for web clients (mobile clients use the token from body)
-    this.setAuthCookie(res, result.access_token);
+    this.cookieService.setAuthCookie(res, result.access_token);
     return result;
   }
 
@@ -241,7 +209,7 @@ export class AuthController {
     description: 'Successfully logged out',
   })
   logout(@Res({ passthrough: true }) res: Response): { message: string } {
-    this.clearAuthCookie(res);
+    this.cookieService.clearAuthCookie(res);
     return { message: 'Successfully logged out' };
   }
 }

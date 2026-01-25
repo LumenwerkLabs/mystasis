@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ConflictException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { ConfigService } from '@nestjs/config';
 import { UserRole, User } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CookieService } from '../../common/services/cookie.service';
 
 // Throttler metadata keys - using string constants to avoid dependency on @nestjs/throttler
 // These match the keys used by the @Throttle decorator
@@ -138,20 +138,17 @@ describe('AuthController', () => {
       const authServiceModule = await import('./auth.service');
       const AuthService = authServiceModule.AuthService;
 
+      // Mock CookieService
+      const mockCookieService = {
+        setAuthCookie: jest.fn(),
+        clearAuthCookie: jest.fn(),
+      };
+
       const module: TestingModule = await Test.createTestingModule({
         controllers: [AuthController],
         providers: [
           { provide: AuthService, useValue: mockAuthService },
-          {
-            provide: ConfigService,
-            useValue: {
-              get: jest.fn((key: string) => {
-                if (key === 'NODE_ENV') return 'test';
-                if (key === 'auth.cookieMaxAge') return 7 * 24 * 60 * 60 * 1000;
-                return undefined;
-              }),
-            },
-          },
+          { provide: CookieService, useValue: mockCookieService },
           Reflector,
         ],
       })

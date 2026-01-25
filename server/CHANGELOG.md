@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenMed PII De-identification Module** (Phase 1)
+  - HIPAA-compliant de-identification of clinical notes before sending to LLM APIs
+  - **Python Microservice** (`openmed-service/`)
+    - FastAPI service wrapping OpenMed library for medical NER
+    - Endpoints: `POST /deidentify`, `POST /extract-pii`, `GET /health`
+    - 5 de-identification methods: `mask`, `remove`, `replace`, `hash`, `shift_dates`
+    - Thread-safe model loading with double-check locking pattern
+    - Rate limiting: 100 requests/minute per IP
+    - API key authentication for service-to-service communication
+    - 1MB text size limit for safety
+  - **NestJS Module** (`src/modules/openmed/`)
+    - `OpenMedService` - HTTP client to Python microservice with retry logic
+    - `DeidentifyRequestDto` / `DeidentifyResponseDto` - Validated DTOs
+    - Graceful degradation with fail-secure behavior (throws error vs passthrough)
+    - HIPAA-compliant structured audit logging (userId, requestId, timestamp)
+  - **Configuration** (`src/config/openmed.config.ts`)
+    - `OPENMED_SERVICE_URL` - Microservice URL (default: `http://localhost:8001`)
+    - `OPENMED_API_KEY` - API key for authentication
+    - `OPENMED_TIMEOUT` - Request timeout (default: 30000ms)
+    - `OPENMED_CONFIDENCE_THRESHOLD` - PII detection threshold (default: 0.7)
+    - `OPENMED_ENABLED` - Enable/disable feature (default: true)
+    - `OPENMED_ALLOW_PASSTHROUGH` - Allow passthrough when service unavailable (default: false in production)
+  - **LLM Service Integration**
+    - `deidentifyClinicalNotes(text, userId?)` - De-identify clinical notes with audit trail
+    - `buildUserPromptWithClinicalNotes(biomarkers, notes, userId?)` - Build prompts with safe notes
+    - Clinical notes excluded from LLM prompts when de-identification fails (fail-secure)
+  - **Docker Compose** - Added `openmed` service with internal network, health checks, resource limits
+  - **Test Coverage** - 173 tests total (145 OpenMed + 25 LLM service + 3 DTO)
+
+- **CookieService** (`src/common/services/cookie.service.ts`)
+  - Reusable service for managing HttpOnly authentication cookies
+  - Centralizes cookie configuration for security consistency across modules
+  - `setAuthCookie()`: Sets JWT token as HttpOnly cookie with security settings
+  - `clearAuthCookie()`: Clears authentication cookie for logout
+  - Security features:
+    - `httpOnly: true` - Prevents JavaScript access (XSS protection)
+    - `secure: true` in production (HTTPS only)
+    - `sameSite: 'strict'` (CSRF protection)
+    - Configurable max age via `auth.cookieMaxAge` config
+  - Exported from global `CommonModule` for use across all modules
+
+- **CommonModule** (`src/common/common.module.ts`)
+  - Global module providing shared services across the application
+  - Marked as `@Global()` so exports are available everywhere without explicit imports
+  - Currently provides: CookieService
+
 - **Users Controller** (`src/modules/users/users.controller.ts`)
   - REST endpoints for user profile management with role-based access control
   - `GET /users` - List users in clinic (CLINICIAN only, paginated)
@@ -59,12 +105,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Clinic ownership validation for all sensitive operations
   - **ClinicsController** (`src/modules/clinics/clinics.controller.ts`)
     - `POST /clinics` - Create a new clinic (CLINICIAN only)
+      - Returns new JWT token with updated `clinicId` in response body
+      - Automatically sets new HttpOnly cookie for web clients
+      - Mobile clients should replace stored token with `accessToken` from response
     - `GET /clinics` - List clinician's own clinic (prevents enumeration)
     - `GET /clinics/:id` - Get clinic by ID (owner only)
     - `PATCH /clinics/:id` - Update clinic (owner only)
     - `DELETE /clinics/:id` - Delete clinic (owner only)
     - `POST /clinics/:clinicId/patients/:patientId` - Enroll patient (owner only)
+      - **Note:** Patient must re-login to receive updated token with new `clinicId`
     - `DELETE /clinics/:clinicId/patients/:patientId` - Unenroll patient (owner only)
+      - **Note:** Patient must re-login to receive updated token without `clinicId`
     - `GET /clinics/:clinicId/patients` - List patients in clinic (owner only)
   - **ClinicsService** (`src/modules/clinics/clinics.service.ts`)
     - Clinic CRUD with ownership validation
@@ -255,6 +306,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Composite index on (userId, type, timestamp) for efficient biomarker queries
 
 ### Security
+
+- **OpenMed PII De-identification Security**
+  - HTTPS enforcement in production for microservice communication
+  - API key authentication between NestJS and Python microservice
+  - Rate limiting: 100 requests/minute per IP to prevent abuse
+  - No PHI in response DTOs by default (`includeOriginalText: false`)
+  - Fail-secure design: throws error instead of passing through PHI in production
+  - Structured HIPAA audit logs with userId, requestId, timestamp for compliance
+  - 1MB text size limit to prevent denial of service
+
+- **JWT Token Refresh Behavior**
+  - JWT tokens contain user data: `sub` (user ID), `email`, `role`, `clinicId`
+  - When JWT-embedded data changes, token refresh is required:
+    - **Clinic creation:** Token automatically refreshed via response + HttpOnly cookie
+    - **Role change (admin action):** User must re-login to receive updated token
+    - **Patient enrollment/unenrollment:** Patient must re-login to receive updated token
+  - This stateless JWT approach:
+    - Avoids database queries on every authenticated request
+    - Provides better performance and scalability
+    - Requires re-authentication when embedded data changes (by design)
+
+- **HttpOnly Cookie Authentication**
+  - Web clients receive JWT via HttpOnly cookie (immune to XSS attacks)
+  - Mobile clients receive JWT in response body (stored in secure storage)
+  - Cookie settings:
+    - `httpOnly: true` - JavaScript cannot access token
+    - `secure: true` in production - HTTPS only
+    - `sameSite: 'strict'` - CSRF protection
+    - 7-day expiration (configurable via `auth.cookieMaxAge`)
 
 - **Rate Limiting** (`@nestjs/throttler`)
   - Global rate limit: 10 requests per 60 seconds (default)

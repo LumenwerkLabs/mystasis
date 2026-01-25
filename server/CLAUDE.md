@@ -24,6 +24,8 @@
 | Generate Prisma client | `cd server && npx prisma generate` |
 | Run migrations | `cd server && npx prisma migrate dev` |
 | Build for production | `cd server && npm run build` |
+| View API docs | Open `http://localhost:3000/api/docs` |
+| View OpenMed docs | Open `http://localhost:8001/docs` |
 
 ### Docker Commands
 
@@ -54,22 +56,29 @@ server/
 │   │       ├── prisma.module.ts
 │   │       └── prisma.service.ts
 │   ├── common/                    # Shared utilities
+│   │   ├── common.module.ts       # Global module for shared services
 │   │   ├── dto/                   # Shared DTOs (BiomarkerDto, UserDto, etc.)
 │   │   ├── decorators/            # @ClinicianOnly(), @CurrentUser()
 │   │   ├── guards/                # JWT auth, role-based guards
 │   │   ├── pipes/                 # UserByIdPipe, ParseBiomarkerPipe, ValidateFilePipe
 │   │   ├── filters/               # Exception filters (Prisma errors, LLM timeouts)
 │   │   ├── interceptors/          # Logging, response shaping, rate limiting
-│   │   └── interfaces/            # Shared TypeScript interfaces
+│   │   ├── interfaces/            # Shared TypeScript interfaces
+│   │   └── services/              # Shared services (CookieService)
 │   └── modules/
 │       ├── auth/                  # Authentication & JWT
 │       ├── users/                 # User profiles and roles
 │       ├── health-data/           # Wearable sync, lab uploads, biomarker trends
 │       ├── alerts/                # Health alerts from biomarker threshold violations
 │       ├── llm/                   # LLM summaries and nudges
+│       ├── openmed/               # PII de-identification for clinical notes
 │       ├── analytics/             # Cohort-level insights for clinics
 │       ├── clinics/               # Clinic management and multi-tenancy
 │       └── health/                # Health checks (/health, /live, /ready)
+├── openmed-service/               # Python microservice for OpenMed NER
+│   ├── main.py                    # FastAPI application
+│   ├── requirements.txt           # Python dependencies
+│   └── Dockerfile                 # Container definition
 ├── test/                          # E2E tests
 ├── package.json
 └── tsconfig.json
@@ -117,6 +126,89 @@ modules/[feature]/
 - Patients can only be enrolled in one clinic at a time
 - Analytics and cohort data are scoped to the clinician's clinic
 - Clinic ownership is validated on all sensitive operations
+
+---
+
+## Authentication & Token Management
+
+### JWT Token Structure
+
+Tokens contain the following claims (set at login/registration):
+- `sub` — User ID
+- `email` — User email
+- `role` — UserRole (PATIENT or CLINICIAN)
+- `clinicId` — Clinic association (optional)
+
+### Cookie-based Authentication
+
+Web clients use HttpOnly cookies for XSS-safe token storage:
+
+```typescript
+// CookieService handles all cookie operations
+cookieService.setAuthCookie(res, token);   // Set token
+cookieService.clearAuthCookie(res);        // Clear on logout
+```
+
+Cookie security settings:
+- `httpOnly: true` — JavaScript cannot access (XSS protection)
+- `secure: true` in production — HTTPS only
+- `sameSite: 'strict'` — CSRF protection
+- 7-day expiration (configurable via `auth.cookieMaxAge`)
+
+Mobile clients receive tokens in response body and store in secure storage.
+
+### Token Refresh Behavior
+
+JWT tokens are stateless — user data is embedded at creation time. When embedded data changes:
+
+| Operation | Affected Data | Token Refresh |
+|-----------|---------------|---------------|
+| Clinic creation | `clinicId` | **Automatic** — new token in response + cookie |
+| Role change (admin) | `role` | **Manual** — user must re-login |
+| Patient enrollment | `clinicId` | **Manual** — patient must re-login |
+| Patient unenrollment | `clinicId` | **Manual** — patient must re-login |
+| Profile update | firstName, lastName | No refresh needed (not in token) |
+
+### When Adding Endpoints That Modify Token Data
+
+If your endpoint modifies `email`, `role`, or `clinicId` for the **requesting user**:
+
+```typescript
+// 1. Inject dependencies
+constructor(
+  private readonly yourService: YourService,
+  private readonly cookieService: CookieService,
+  private readonly jwtService: JwtService,
+) {}
+
+// 2. Generate new token and set cookie
+@Post('your-endpoint')
+async yourMethod(
+  @CurrentUser() user: UserPayload,
+  @Res({ passthrough: true }) res: Response,
+) {
+  const result = await this.yourService.doSomething(user.sub);
+
+  // Generate new token with updated data
+  const newToken = await this.jwtService.signAsync({
+    sub: user.sub,
+    email: result.email,
+    role: result.role,
+    clinicId: result.clinicId,
+  });
+
+  // Set cookie for web clients
+  this.cookieService.setAuthCookie(res, newToken);
+
+  // Return token in body for mobile clients
+  return { ...result, accessToken: newToken, tokenType: 'Bearer' };
+}
+```
+
+If your endpoint modifies data for a **different user** (e.g., admin changing patient's clinic):
+- You cannot refresh their token (they're not making the request)
+- Document that the affected user must re-login
+- This is by design for stateless JWT architecture
 
 **Alert Status Flow (`AlertStatus` enum):**
 - `ACTIVE` — Newly created, needs attention
@@ -211,6 +303,101 @@ export class CreateBiomarkerDto {
 
 ---
 
+## OpenMed PII De-identification
+
+**Location:** `modules/openmed/` (NestJS) + `openmed-service/` (Python)
+
+### Architecture
+
+The OpenMed integration uses a hybrid architecture to leverage Python's medical NER capabilities while maintaining the NestJS backend:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Patient Data   │ --> │  OpenMed Service │ --> │   Claude API    │
+│ (Clinical Notes)│     │  (De-identify)   │     │ (Safe Analysis) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                               │
+                        ┌──────┴──────┐
+                        │ Audit Logs  │
+                        │ (HIPAA)     │
+                        └─────────────┘
+```
+
+### De-identification Methods
+
+| Method | Description | Use Case |
+|--------|-------------|----------|
+| `mask` | Replace with `[TYPE]` placeholder | Default, preserves context |
+| `remove` | Delete PII entirely | Maximum privacy |
+| `replace` | Substitute with fake values | Testing/demo |
+| `hash` | One-way hash (SHA-256) | Linkable anonymization |
+| `shift_dates` | Shift dates by random offset | Temporal analysis |
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENMED_SERVICE_URL` | Python microservice URL | `http://localhost:8001` |
+| `OPENMED_API_KEY` | API key for authentication | Required in production |
+| `OPENMED_TIMEOUT` | Request timeout (ms) | `30000` |
+| `OPENMED_CONFIDENCE_THRESHOLD` | PII detection threshold (0-1) | `0.7` |
+| `OPENMED_ENABLED` | Enable/disable feature | `true` |
+| `OPENMED_ALLOW_PASSTHROUGH` | Allow passthrough on failure | `false` (production) |
+
+### Usage Pattern
+
+```typescript
+// De-identify clinical notes before LLM processing
+const safeNotes = await this.openMedService.deidentify({
+  text: clinicalNotes,
+  method: 'mask',
+  includeOriginalText: false, // Never include PHI in logs
+});
+
+// Build prompt with de-identified notes
+const prompt = await this.llmService.buildUserPromptWithClinicalNotes(
+  biomarkers,
+  clinicalNotes,
+  userId, // For audit trail
+);
+```
+
+### Safety Rules
+
+| Rule | Implementation |
+|------|----------------|
+| Fail-secure | Throws error instead of passing PHI through in production |
+| Audit logging | All de-identification requests logged with userId, requestId |
+| No PHI in responses | `includeOriginalText: false` by default |
+| Size limits | 1MB max text size to prevent DoS |
+| Rate limiting | 100 req/min per IP on microservice |
+
+### Docker Commands
+
+| Action | Command |
+|--------|---------|
+| Start OpenMed service | `docker-compose up -d openmed` |
+| View OpenMed logs | `docker-compose logs -f openmed` |
+| Restart OpenMed | `docker-compose restart openmed` |
+
+### OpenAPI Documentation
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| NestJS API | `http://localhost:3000/api/docs` | Main API docs (Swagger UI) |
+| OpenMed Microservice | `http://localhost:8001/docs` | PII de-identification API (Swagger UI) |
+| OpenMed ReDoc | `http://localhost:8001/redoc` | Alternative documentation format |
+
+**OpenMed API Endpoints:**
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| `POST` | `/deidentify` | De-identify clinical text | API Key |
+| `POST` | `/extract-pii` | Extract PII entities without de-identification | API Key |
+| `GET` | `/health` | Service health check | None |
+
+---
+
 ## LLM Integration Rules
 
 **Location:** `modules/llm/llm.service.ts`
@@ -223,6 +410,8 @@ export class CreateBiomarkerDto {
 | No medication changes | Never suggest medication changes |
 | Defer to clinicians | Always direct users to clinicians for decisions |
 | Explain, don't prescribe | Frame outputs as trend explanations, not medical advice |
+| De-identify PII | Always use OpenMed to de-identify clinical notes before LLM calls |
+| Fail-secure for PHI | If de-identification fails, exclude clinical notes from prompt |
 
 ### Allowed LLM Output Types
 
@@ -322,6 +511,17 @@ If you add a new critical external dependency (API, service, queue), add a corre
 2. Test prompts manually before committing
 3. Ensure fallback behavior exists for LLM failures
 4. Log all LLM interactions for debugging and audit
+5. **Always de-identify clinical notes** using `OpenMedService.deidentify()` before including in prompts
+6. Use `buildUserPromptWithClinicalNotes()` for prompts that include clinical text
+
+### When Working with OpenMed Module
+
+1. Never set `OPENMED_ALLOW_PASSTHROUGH=true` in production
+2. Always include `userId` in audit trail calls for HIPAA compliance
+3. Use `includeOriginalText: false` (default) to keep PHI out of responses/logs
+4. Test with realistic clinical notes containing various PII types
+5. Monitor confidence scores — adjust threshold if false negatives occur
+6. The Python microservice must be running for de-identification to work
 
 ### Verification Checklist
 
@@ -332,3 +532,5 @@ If you add a new critical external dependency (API, service, queue), add a corre
 - [ ] No hardcoded configuration (use `config/`)
 - [ ] LLM outputs respect safety constraints
 - [ ] Code follows existing module patterns
+- [ ] Clinical notes de-identified before LLM calls (if applicable)
+- [ ] HIPAA audit logging includes userId for PHI operations

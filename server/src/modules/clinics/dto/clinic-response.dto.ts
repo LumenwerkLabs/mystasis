@@ -56,6 +56,34 @@ export class ClinicResponseDto {
  *
  * @description Safe user representation without password field.
  */
+/**
+ * DTO for clinic creation response with access token.
+ *
+ * @description Returns the created clinic along with a new JWT access token
+ * that includes the updated clinicId. The client should replace its stored
+ * token with this new one to have immediate access to clinic operations.
+ */
+export class CreateClinicResponseDto {
+  @ApiProperty({
+    description: 'The created clinic',
+    type: ClinicResponseDto,
+  })
+  clinic: ClinicResponseDto;
+
+  @ApiProperty({
+    description:
+      'New JWT access token with updated clinicId. Replace your current token with this one.',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  })
+  accessToken: string;
+
+  @ApiProperty({
+    description: 'Token type (always Bearer for JWT)',
+    example: 'Bearer',
+  })
+  tokenType: string;
+}
+
 export class SafeUserResponseDto {
   @ApiProperty({
     description: 'Unique identifier of the user (UUID)',

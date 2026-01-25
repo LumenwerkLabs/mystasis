@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { UserRole } from '@prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 
@@ -105,11 +106,21 @@ interface MockPrismaService {
   $transaction: jest.Mock;
 }
 
+// Define CreateClinicResponse interface
+interface CreateClinicResponse {
+  clinic: Clinic;
+  accessToken: string;
+  tokenType: string;
+}
+
 describe('ClinicsService', () => {
   // Service will be imported dynamically
   let ClinicsService: new (...args: unknown[]) => unknown;
   let service: {
-    create: (data: CreateClinicDto, clinicianId: string) => Promise<Clinic>;
+    create: (
+      data: CreateClinicDto,
+      clinicianId: string,
+    ) => Promise<CreateClinicResponse>;
     findAll: () => Promise<Clinic[]>;
     findOne: (id: string) => Promise<Clinic>;
     update: (id: string, data: UpdateClinicDto) => Promise<Clinic>;
@@ -214,6 +225,11 @@ describe('ClinicsService', () => {
 
     jest.clearAllMocks();
 
+    // Mock JwtService
+    const mockJwtService = {
+      signAsync: jest.fn().mockResolvedValue('mock-jwt-token'),
+    };
+
     // Dynamic import to allow test to exist before implementation
     try {
       const clinicsServiceModule = await import('./clinics.service');
@@ -225,6 +241,10 @@ describe('ClinicsService', () => {
           {
             provide: PrismaService,
             useValue: mockPrismaService,
+          },
+          {
+            provide: JwtService,
+            useValue: mockJwtService,
           },
         ],
       }).compile();
@@ -266,7 +286,9 @@ describe('ClinicsService', () => {
         // Arrange
         mockPrismaService.clinic.create.mockResolvedValue(mockClinic);
         mockPrismaService.user.update.mockResolvedValue({
-          ...mockClinician,
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
           clinicId: mockClinic.id,
         });
 
@@ -274,7 +296,9 @@ describe('ClinicsService', () => {
         const result = await service.create(createClinicDto, clinicianId);
 
         // Assert
-        expect(result).toEqual(mockClinic);
+        expect(result.clinic).toEqual(mockClinic);
+        expect(result.accessToken).toBe('mock-jwt-token');
+        expect(result.tokenType).toBe('Bearer');
         expect(mockPrismaService.clinic.create).toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
@@ -290,7 +314,9 @@ describe('ClinicsService', () => {
         // Arrange
         mockPrismaService.clinic.create.mockResolvedValue(mockClinic);
         mockPrismaService.user.update.mockResolvedValue({
-          ...mockClinician,
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
           clinicId: mockClinic.id,
         });
 
@@ -317,7 +343,9 @@ describe('ClinicsService', () => {
         };
         mockPrismaService.clinic.create.mockResolvedValue(minimalClinic);
         mockPrismaService.user.update.mockResolvedValue({
-          ...mockClinician,
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
           clinicId: minimalClinic.id,
         });
 
@@ -325,7 +353,7 @@ describe('ClinicsService', () => {
         const result = await service.create(minimalDto, clinicianId);
 
         // Assert
-        expect(result.name).toBe('Minimal Clinic');
+        expect(result.clinic.name).toBe('Minimal Clinic');
         expect(mockPrismaService.clinic.create).toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({
@@ -339,7 +367,9 @@ describe('ClinicsService', () => {
         // Arrange
         mockPrismaService.clinic.create.mockResolvedValue(mockClinic);
         mockPrismaService.user.update.mockResolvedValue({
-          ...mockClinician,
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
           clinicId: mockClinic.id,
         });
 
@@ -347,16 +377,18 @@ describe('ClinicsService', () => {
         const result = await service.create(createClinicDto, clinicianId);
 
         // Assert
-        expect(result.id).toBeDefined();
-        expect(result.createdAt).toBeDefined();
-        expect(result.updatedAt).toBeDefined();
+        expect(result.clinic.id).toBeDefined();
+        expect(result.clinic.createdAt).toBeDefined();
+        expect(result.clinic.updatedAt).toBeDefined();
       });
 
       it('should use a transaction for clinic creation and user update', async () => {
         // Arrange
         mockPrismaService.clinic.create.mockResolvedValue(mockClinic);
         mockPrismaService.user.update.mockResolvedValue({
-          ...mockClinician,
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
           clinicId: mockClinic.id,
         });
 
@@ -365,6 +397,24 @@ describe('ClinicsService', () => {
 
         // Assert
         expect(mockPrismaService.$transaction).toHaveBeenCalled();
+      });
+
+      it('should return a new access token with updated clinicId', async () => {
+        // Arrange
+        mockPrismaService.clinic.create.mockResolvedValue(mockClinic);
+        mockPrismaService.user.update.mockResolvedValue({
+          id: clinicianId,
+          email: mockClinician.email,
+          role: mockClinician.role,
+          clinicId: mockClinic.id,
+        });
+
+        // Act
+        const result = await service.create(createClinicDto, clinicianId);
+
+        // Assert
+        expect(result.accessToken).toBeDefined();
+        expect(result.tokenType).toBe('Bearer');
       });
     });
 

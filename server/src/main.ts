@@ -94,6 +94,10 @@ async function bootstrap(): Promise<void> {
     .addTag('LLM', 'LLM-generated summaries and nudges')
     .addTag('Clinics', 'Clinic management and multi-tenancy')
     .addTag('Health', 'Application health checks')
+    .addTag(
+      'OpenMed',
+      'PII de-identification for clinical notes (internal service - see openmed-service/docs for microservice API)',
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

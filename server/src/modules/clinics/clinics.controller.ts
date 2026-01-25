@@ -9,6 +9,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
   ForbiddenException,
+  Res,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,11 +18,18 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { Response } from 'express';
 import { UserRole, Clinic } from '@prisma/client';
-import { ClinicsService, SafeUser } from './clinics.service';
+import { CookieService } from '../../common/services/cookie.service';
+import {
+  ClinicsService,
+  SafeUser,
+  CreateClinicResponse,
+} from './clinics.service';
 import { CreateClinicDto, UpdateClinicDto } from './dto';
 import {
   ClinicResponseDto,
+  CreateClinicResponseDto,
   SafeUserResponseDto,
 } from './dto/clinic-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -57,7 +65,10 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.CLINICIAN)
 export class ClinicsController {
-  constructor(private readonly clinicsService: ClinicsService) {}
+  constructor(
+    private readonly clinicsService: ClinicsService,
+    private readonly cookieService: CookieService,
+  ) {}
 
   /**
    * Validates that the current user has access to the specified clinic.
@@ -79,18 +90,21 @@ export class ClinicsController {
    *
    * @param createClinicDto - The clinic creation data
    * @param user - The current user payload
-   * @returns The created clinic
+   * @param res - Express response for setting HttpOnly cookie
+   * @returns The created clinic and a new access token with updated clinicId
    */
   @Post()
   @ApiOperation({
     summary: 'Create a new clinic',
     description:
-      'Creates a new clinic and automatically associates the creating clinician as the owner. Only CLINICIAN role can create clinics.',
+      'Creates a new clinic and automatically associates the creating clinician as the owner. ' +
+      'Sets a new HttpOnly cookie with updated clinicId for web clients (automatic). ' +
+      'Also returns the token in body for mobile clients. Only CLINICIAN role can create clinics.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Clinic created successfully',
-    type: ClinicResponseDto,
+    description: 'Clinic created successfully with new access token',
+    type: CreateClinicResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -107,9 +121,15 @@ export class ClinicsController {
   async create(
     @Body() createClinicDto: CreateClinicDto,
     @CurrentUser() user: UserPayload,
-  ): Promise<Clinic> {
-    // Create clinic and associate with the clinician
-    return this.clinicsService.create(createClinicDto, user.sub);
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<CreateClinicResponse> {
+    // Create clinic and associate with the clinician, returns new token
+    const result = await this.clinicsService.create(createClinicDto, user.sub);
+
+    // Set HttpOnly cookie for web clients (mobile clients use the token from body)
+    this.cookieService.setAuthCookie(res, result.accessToken);
+
+    return result;
   }
 
   /**

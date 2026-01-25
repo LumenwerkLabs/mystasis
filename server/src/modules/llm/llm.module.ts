@@ -4,6 +4,7 @@ import { LlmService, HTTP_SERVICE_TOKEN } from './llm.service';
 import { LlmController } from './llm.controller';
 import { HealthDataModule } from '../health-data/health-data.module';
 import { AuthModule } from '../auth/auth.module';
+import { OpenMedModule } from '../openmed/openmed.module';
 
 /**
  * LLM module for health insights and wellness nudges.
@@ -18,6 +19,7 @@ import { AuthModule } from '../auth/auth.module';
  * - PrismaModule (global): For persisting generated summaries
  * - HealthDataModule: For accessing biomarker trend data
  * - HttpModule: For making HTTP requests to LLM API
+ * - OpenMedModule: For PII de-identification before LLM processing
  *
  * Configuration required in environment:
  * - llm.apiUrl: LLM API endpoint URL
@@ -25,7 +27,7 @@ import { AuthModule } from '../auth/auth.module';
  * - llm.model: LLM model identifier (e.g., 'gpt-4')
  */
 @Module({
-  imports: [HttpModule, HealthDataModule, AuthModule],
+  imports: [HttpModule, HealthDataModule, AuthModule, OpenMedModule],
   controllers: [LlmController],
   providers: [
     LlmService,
