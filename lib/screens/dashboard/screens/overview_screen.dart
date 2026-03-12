@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/models/llm_summary_model.dart';
+import 'package:mystasis/core/widgets/medical_disclaimer.dart';
+import 'package:mystasis/providers/biomarkers_provider.dart';
+import 'package:mystasis/providers/insights_provider.dart';
 
 class OverviewScreen extends StatelessWidget {
-  const OverviewScreen({super.key});
+  final String? patientId;
+
+  const OverviewScreen({super.key, this.patientId});
 
   @override
   Widget build(BuildContext context) {
@@ -67,11 +74,13 @@ class OverviewScreen extends StatelessWidget {
   }
 
   Widget _buildRightColumn() {
-    return const Column(
+    return Column(
       children: [
-        _UpcomingActionsCard(),
-        SizedBox(height: 24),
-        _RecentActivityCard(),
+        _AIInsightsCard(patientId: patientId),
+        const SizedBox(height: 24),
+        const _UpcomingActionsCard(),
+        const SizedBox(height: 24),
+        const _RecentActivityCard(),
       ],
     );
   }
@@ -389,44 +398,86 @@ class _RecentBiomarkersCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final biomarkers = [
-      _BiomarkerData('Glucose (Fasting)', '92', 'mg/dL', 'optimal', '70-100'),
-      _BiomarkerData('HbA1c', '5.2', '%', 'optimal', '<5.7'),
-      _BiomarkerData('LDL Cholesterol', '118', 'mg/dL', 'borderline', '<100'),
-      _BiomarkerData('hsCRP', '0.8', 'mg/L', 'optimal', '<1.0'),
-      _BiomarkerData('Vitamin D', '42', 'ng/mL', 'optimal', '30-100'),
-    ];
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        // Use real data if available, fallback to empty state
+        final latestBiomarkers = provider.latestByType;
+        final displayBiomarkers = latestBiomarkers.take(5).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Recent Biomarkers',
-                style: Theme.of(context).textTheme.headlineSmall,
+        if (provider.isLoading) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
               ),
-              TextButton(onPressed: () {}, child: const Text('View All')),
+            ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          ...biomarkers.map((b) => _BiomarkerRow(data: b)),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent Biomarkers',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  TextButton(onPressed: () {}, child: const Text('View All')),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (displayBiomarkers.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'No biomarker data available.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: MystasisTheme.neutralGrey,
+                    ),
+                  ),
+                )
+              else
+                ...displayBiomarkers.map((b) => _BiomarkerRow(
+                      data: _BiomarkerData(
+                        b.displayName,
+                        b.value.toStringAsFixed(b.value % 1 == 0 ? 0 : 1),
+                        b.unit,
+                        b.status,
+                        b.rangeDisplay,
+                      ),
+                    )),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -506,6 +557,115 @@ class _BiomarkerRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AIInsightsCard extends StatelessWidget {
+  final String? patientId;
+
+  const _AIInsightsCard({this.patientId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<InsightsProvider>(
+      builder: (context, provider, _) {
+        final latest = provider.latestSummary;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome,
+                    size: 20,
+                    color: MystasisTheme.cellularBlue,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI Insights',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (provider.isGenerating)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (latest != null) ...[
+                // Type badge
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: MystasisTheme.cellularBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    latest.type.displayName,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: MystasisTheme.cellularBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Preview (first ~150 chars)
+                Text(
+                  latest.content.length > 150
+                      ? '${latest.content.substring(0, 150)}...'
+                      : latest.content,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const MedicalDisclaimer(),
+              ] else ...[
+                // Empty state
+                Text(
+                  'No AI insights generated yet.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (patientId != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        context.read<InsightsProvider>().generateSummary(
+                              patientId!,
+                              SummaryType.weeklySummary,
+                            );
+                      },
+                      icon: const Icon(Icons.auto_awesome, size: 16),
+                      label: const Text('Generate Insights'),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

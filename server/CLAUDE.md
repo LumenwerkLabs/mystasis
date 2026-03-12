@@ -23,6 +23,7 @@
 | Format code | `cd server && npm run format` |
 | Generate Prisma client | `cd server && npx prisma generate` |
 | Run migrations | `cd server && npx prisma migrate dev` |
+| Seed database | `cd server && npx prisma db seed` |
 | Build for production | `cd server && npm run build` |
 | View API docs | Open `http://localhost:3000/api/docs` |
 | View OpenMed docs | Open `http://localhost:8001/docs` |
@@ -46,7 +47,8 @@
 ```
 server/
 ├── prisma/
-│   └── schema.prisma              # Prisma schema (models, enums, relations)
+│   ├── schema.prisma              # Prisma schema (models, enums, relations)
+│   └── seed.ts                    # Idempotent seed script (demo clinic, users, biomarkers)
 ├── src/
 │   ├── main.ts                    # Bootstrap, global filters/pipes/interceptors
 │   ├── app.module.ts              # Root module wiring
@@ -450,6 +452,24 @@ async generateSummary(biomarkers: BiomarkerValue[], role: UserRole): Promise<LLM
 
 **When Adding Dependencies:**
 If you add a new critical external dependency (API, service, queue), add a corresponding health indicator in `modules/health/` so orchestrators have accurate system health visibility.
+
+---
+
+## Seed Data
+
+**Location:** `prisma/seed.ts`
+**Run:** `cd server && npx prisma db seed`
+
+The seed script is idempotent and creates demo data for local development:
+
+| Data | Details |
+|------|---------|
+| Clinic | 1 clinic ("Mystasis Demo Clinic") |
+| Clinician | `clinician@mystasis.dev` / `TestPass123` (CLINICIAN role) |
+| Patients | `lucia@mystasis.dev`, `john@mystasis.dev`, `maria@mystasis.dev` (PATIENT role, same password) |
+| Biomarkers | ~60 readings per patient (12 types x 5 readings, spread over 3 months, source: `seed_data`) |
+
+Users are upserted on email. Seed biomarkers (identified by `source: 'seed_data'`) are deleted and reinserted on each run.
 
 ---
 

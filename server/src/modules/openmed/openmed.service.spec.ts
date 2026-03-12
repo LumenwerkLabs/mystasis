@@ -208,7 +208,7 @@ describe('OpenMedService', () => {
     return error;
   };
 
-  beforeAll(async () => {
+  beforeAll(() => {
     try {
       // Dynamic import to allow tests to compile before implementation exists
       // eslint-disable-next-line @typescript-eslint/no-require-imports

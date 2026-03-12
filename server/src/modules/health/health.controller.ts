@@ -11,6 +11,8 @@ import {
   HealthCheckResult,
 } from '@nestjs/terminus';
 import { PrismaHealthIndicator } from './prisma.health';
+import { LlmHealthIndicator } from './llm.health';
+import { OpenMedHealthIndicator } from './openmed.health';
 
 /**
  * HealthController provides health check endpoints for the application.
@@ -22,6 +24,8 @@ export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly prismaHealth: PrismaHealthIndicator,
+    private readonly llmHealth: LlmHealthIndicator,
+    private readonly openMedHealth: OpenMedHealthIndicator,
   ) {}
 
   /**
@@ -63,7 +67,11 @@ export class HealthController {
     description: 'Service unavailable - one or more dependencies unhealthy',
   })
   async check(): Promise<HealthCheckResult> {
-    return this.health.check([() => this.prismaHealth.isHealthy('database')]);
+    return this.health.check([
+      () => this.prismaHealth.isHealthy('database'),
+      () => this.llmHealth.isHealthy('llm'),
+      () => this.openMedHealth.isHealthy('openmed'),
+    ]);
   }
 
   /**
@@ -131,6 +139,10 @@ export class HealthController {
     description: 'Service not ready - database connection failed',
   })
   async ready(): Promise<HealthCheckResult> {
-    return this.health.check([() => this.prismaHealth.isHealthy('database')]);
+    return this.health.check([
+      () => this.prismaHealth.isHealthy('database'),
+      () => this.llmHealth.isHealthy('llm'),
+      () => this.openMedHealth.isHealthy('openmed'),
+    ]);
   }
 }

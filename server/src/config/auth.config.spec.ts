@@ -1,4 +1,5 @@
-import { registerAs } from '@nestjs/config';
+import { AuthConfig } from './auth.config';
+import { ConfigFactoryKeyHost } from '@nestjs/config';
 
 /**
  * TDD Tests for AuthConfig
@@ -18,7 +19,7 @@ import { registerAs } from '@nestjs/config';
  */
 
 // Import the config - will fail until implemented
-let authConfig: ReturnType<typeof registerAs>;
+let authConfig: (() => AuthConfig) & ConfigFactoryKeyHost;
 
 beforeAll(async () => {
   try {

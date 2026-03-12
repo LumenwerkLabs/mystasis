@@ -26,7 +26,7 @@ interface JwtPayload {
 function extractJwtFromCookieOrHeader(req: Request): string | null {
   // First, try to extract from HttpOnly cookie (web clients)
   if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
-    return req.cookies[AUTH_COOKIE_NAME];
+    return req.cookies[AUTH_COOKIE_NAME] as string;
   }
   // Fall back to Authorization header (mobile clients)
   return ExtractJwt.fromAuthHeaderAsBearerToken()(req);

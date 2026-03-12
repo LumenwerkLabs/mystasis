@@ -44,7 +44,7 @@ interface MockConfigService {
 }
 
 interface MockHealthDataService {
-  getTrend: jest.Mock;
+  findAll: jest.Mock;
   findLatest: jest.Mock;
 }
 
@@ -221,7 +221,7 @@ describe('LlmService', () => {
     };
 
     mockHealthDataService = {
-      getTrend: jest.fn(),
+      findAll: jest.fn(),
       findLatest: jest.fn(),
     };
 
@@ -299,7 +299,7 @@ describe('LlmService', () => {
       it('should return summary with disclaimer when biomarker data exists', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           summary: 'Your HRV shows an improving trend over the past week.',
@@ -327,7 +327,7 @@ describe('LlmService', () => {
       it('should save summary to database with correct audienceRole', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockClinician);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           summary: 'Patient HRV shows improving trend.',
@@ -367,7 +367,7 @@ describe('LlmService', () => {
       it('should call LLM API with correct headers and prompt', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           summary: 'Summary content.',
@@ -410,7 +410,7 @@ describe('LlmService', () => {
       it('should include structured data in summary response', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           summary: 'Your HRV is improving.',
@@ -450,7 +450,7 @@ describe('LlmService', () => {
       it('should return insufficient data message when user has no biomarker data', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue([]);
+        mockHealthDataService.findAll.mockResolvedValue({ data: [], total: 0, page: 1, limit: 200 });
 
         // Act
         const result = await service.generateSummary(
@@ -468,7 +468,7 @@ describe('LlmService', () => {
       it('should handle various summary types correctly', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           summary: 'Daily recap of your biomarkers.',
@@ -515,7 +515,7 @@ describe('LlmService', () => {
       it('should return fallback response when LLM API times out', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const timeoutError = new MockHttpError('timeout of 30000ms exceeded');
         timeoutError.code = 'ECONNABORTED';
@@ -536,7 +536,7 @@ describe('LlmService', () => {
       it('should return fallback response when LLM API returns error', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const apiError = new MockHttpError(
           'Request failed with status code 500',
@@ -565,7 +565,7 @@ describe('LlmService', () => {
       it('should handle HTTP error from LLM API gracefully', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const rateLimitError = new MockHttpError('Rate limit exceeded');
         rateLimitError.response = {
@@ -600,7 +600,7 @@ describe('LlmService', () => {
       it('should return valid nudge with disclaimer for patient', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           nudge:
@@ -628,7 +628,7 @@ describe('LlmService', () => {
       it('should save nudge to database with PATIENT audience role', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const llmResponse = createMockLlmResponse({
           nudge: 'Remember to stay hydrated today!',
@@ -659,7 +659,7 @@ describe('LlmService', () => {
       it('should return safe response when trend data is empty', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue([]);
+        mockHealthDataService.findAll.mockResolvedValue({ data: [], total: 0, page: 1, limit: 200 });
 
         // Act
         const result = await service.generateNudge('user-uuid-1');
@@ -686,7 +686,7 @@ describe('LlmService', () => {
       it('should return fallback nudge when LLM API fails', async () => {
         // Arrange
         mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-        mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+        mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
         const apiError = new MockHttpError('Service unavailable');
         mockHttpService.post.mockReturnValue(throwError(() => apiError));
@@ -710,7 +710,7 @@ describe('LlmService', () => {
     it('should always include disclaimer in all responses', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const llmResponse = createMockLlmResponse({
         summary: 'Your biomarkers look good.',
@@ -745,7 +745,7 @@ describe('LlmService', () => {
     it('should sanitize LLM response containing diagnosis keywords', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       // LLM returns unsafe content with diagnosis language
       const unsafeLlmResponse = createMockLlmResponse({
@@ -774,7 +774,7 @@ describe('LlmService', () => {
     it('should sanitize LLM response containing medication advice', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       // LLM returns unsafe content with medication advice
       const unsafeLlmResponse = createMockLlmResponse({
@@ -804,7 +804,7 @@ describe('LlmService', () => {
     it('should include clinician deferral language in patient-facing responses', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const llmResponse = createMockLlmResponse({
         nudge: 'Your HRV has been improving. Keep up the good work!',
@@ -827,7 +827,7 @@ describe('LlmService', () => {
     it('should not include treatment recommendations in patient-facing summaries', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       // LLM returns content with treatment recommendations
       const unsafeLlmResponse = createMockLlmResponse({
@@ -855,7 +855,7 @@ describe('LlmService', () => {
     it('should frame outputs as observations not diagnoses', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const safeResponse = createMockLlmResponse({
         summary:
@@ -889,7 +889,7 @@ describe('LlmService', () => {
     it('should return SummaryResponseDto with all required fields', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const llmResponse = createMockLlmResponse({
         summary: 'Your biomarkers are stable.',
@@ -920,7 +920,7 @@ describe('LlmService', () => {
     it('should return NudgeResponseDto with all required fields', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const llmResponse = createMockLlmResponse({
         nudge: 'Stay active today!',
@@ -946,7 +946,7 @@ describe('LlmService', () => {
     it('should include optional structuredData in SummaryResponseDto when available', async () => {
       // Arrange
       mockPrismaService.user.findUnique.mockResolvedValue(mockUser);
-      mockHealthDataService.getTrend.mockResolvedValue(mockBiomarkerValues);
+      mockHealthDataService.findAll.mockResolvedValue({ data: mockBiomarkerValues, total: mockBiomarkerValues.length, page: 1, limit: 200 });
 
       const llmResponse = createMockLlmResponse({
         summary: 'Analysis complete.',

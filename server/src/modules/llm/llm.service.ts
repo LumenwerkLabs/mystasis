@@ -1,10 +1,15 @@
-import { Injectable, Inject, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   SummaryType,
   UserRole,
   BiomarkerValue,
-  BiomarkerType,
 } from '@prisma/client';
 import { Observable, firstValueFrom } from 'rxjs';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -90,7 +95,10 @@ interface HttpService {
   post: (
     url: string,
     data: unknown,
-    config?: { headers?: Record<string, string> },
+    config?: {
+      headers?: Record<string, string>;
+      timeout?: number;
+    },
   ) => Observable<LlmApiResponse>;
 }
 
@@ -166,8 +174,10 @@ interface DeidentificationAuditLog {
  * const nudge = await llmService.generateNudge('user-123');
  */
 @Injectable()
-export class LlmService {
+export class LlmService implements OnModuleInit {
   private readonly logger = new Logger(LlmService.name);
+
+  private readonly HEALTH_CHECK_TIMEOUT = 5000;
 
   private readonly DISCLAIMER =
     'Discuss these findings with your healthcare provider.';
@@ -189,6 +199,103 @@ export class LlmService {
     private readonly prisma: PrismaService,
     private readonly openMedService: OpenMedService,
   ) {}
+
+  // ============================================
+  // LIFECYCLE & HEALTH
+  // ============================================
+
+  /**
+   * Gets the enabled flag from config.
+   */
+  private get enabled(): boolean {
+    return this.configService.get<boolean>('llm.enabled') ?? true;
+  }
+
+  /**
+   * Gets the health check on init flag from config.
+   */
+  private get healthCheckOnInit(): boolean {
+    return this.configService.get<boolean>('llm.healthCheckOnInit') ?? true;
+  }
+
+  /**
+   * Lifecycle hook called after module initialization.
+   * Performs optional health check if enabled.
+   */
+  async onModuleInit(): Promise<void> {
+    if (!this.enabled || !this.healthCheckOnInit) {
+      return;
+    }
+
+    try {
+      const isHealthy = await this.isAvailable();
+      if (isHealthy) {
+        this.logger.log('LLM service is available and healthy');
+      } else {
+        this.logger.warn('LLM service is not available or not configured');
+      }
+    } catch (error) {
+      const errorType =
+        error instanceof Error ? error.constructor.name : 'Unknown';
+      this.logger.warn(
+        `Failed to check LLM service health on init: ${errorType}`,
+      );
+    }
+  }
+
+  /**
+   * Checks if the LLM service is available and configured.
+   *
+   * @returns true if service is enabled, configured, and the API is reachable
+   */
+  async isAvailable(): Promise<boolean> {
+    if (!this.enabled) {
+      return false;
+    }
+
+    const apiUrl = this.configService.get<string>('llm.apiUrl');
+    const apiKey = this.configService.get<string>('llm.apiKey');
+    const model = this.configService.get<string>('llm.model');
+
+    if (!apiUrl || !apiKey || !model) {
+      return false;
+    }
+
+    try {
+      // Send a minimal request to verify API connectivity
+      await firstValueFrom(
+        this.httpService.post(
+          apiUrl,
+          {
+            model,
+            messages: [{ role: 'user', content: 'ping' }],
+            max_tokens: 1,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: this.HEALTH_CHECK_TIMEOUT,
+          },
+        ),
+      );
+      return true;
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { error?: { message?: string } } };
+        message?: string;
+        constructor?: { name?: string };
+      };
+      const status = axiosError.response?.status;
+      const message =
+        axiosError.response?.data?.error?.message || axiosError.message;
+      this.logger.debug(
+        `LLM health check failed: ${status ?? 'no response'} - ${message}`,
+      );
+      return false;
+    }
+  }
 
   // ============================================
   // HELPER METHODS
@@ -276,9 +383,14 @@ export class LlmService {
     userPrompt: string,
     fallbackField: 'summary' | 'nudge',
   ): Promise<LlmParsedResponse> {
+    if (!this.enabled) {
+      throw new Error('LLM service is disabled');
+    }
+
     const apiUrl = this.configService.get<string>('llm.apiUrl');
     const apiKey = this.configService.get<string>('llm.apiKey');
     const model = this.configService.get<string>('llm.model');
+    const timeout = this.configService.get<number>('llm.timeout') || 30000;
 
     // Validate required configuration
     if (!apiUrl || !apiKey || !model) {
@@ -307,6 +419,7 @@ export class LlmService {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
+          timeout,
         },
       ),
     );
@@ -333,7 +446,7 @@ export class LlmService {
    *
    * **Process:**
    * 1. Validates user exists
-   * 2. Retrieves HRV biomarker data for last 30 days
+   * 2. Retrieves all biomarker data for last 30 days
    * 3. If no data, returns insufficient data message without calling LLM
    * 4. Builds prompts based on summary type
    * 5. Calls LLM API and sanitizes response for medical safety
@@ -383,14 +496,17 @@ export class LlmService {
     // Validate user exists
     await this.validateUserExists(userId);
 
-    // Get biomarker data for trend analysis (last 30 days)
+    // Get all biomarker data for trend analysis (last 30 days)
     const { startDate, endDate } = this.getDateRange(30);
 
-    const biomarkerData = await this.healthDataService.getTrend(
+    const { data: biomarkerData } = await this.healthDataService.findAll(
       userId,
-      BiomarkerType.HEART_RATE_VARIABILITY, // Use HRV as primary indicator
-      startDate,
-      endDate,
+      {
+        startDate,
+        endDate,
+        page: 1,
+        limit: 200, // Fetch enough to cover all types
+      },
     );
 
     // If no data, return insufficient data message without calling LLM
@@ -479,7 +595,7 @@ export class LlmService {
    *
    * **Process:**
    * 1. Validates user exists
-   * 2. Retrieves HRV biomarker data for last 7 days
+   * 2. Retrieves all biomarker data for last 7 days
    * 3. If no data, returns generic wellness nudge
    * 4. Builds nudge-specific prompts
    * 5. Calls LLM API and sanitizes response
@@ -514,11 +630,14 @@ export class LlmService {
     // Get recent biomarker data (last 7 days)
     const { startDate, endDate } = this.getDateRange(7);
 
-    const biomarkerData = await this.healthDataService.getTrend(
+    const { data: biomarkerData } = await this.healthDataService.findAll(
       userId,
-      BiomarkerType.HEART_RATE_VARIABILITY,
-      startDate,
-      endDate,
+      {
+        startDate,
+        endDate,
+        page: 1,
+        limit: 100,
+      },
     );
 
     // If no data, return generic wellness nudge
@@ -624,8 +743,28 @@ Respond in JSON format with: summary, flags (array), recommendations (array), qu
    * @returns Formatted user prompt string with JSON-encoded biomarker data
    */
   private buildUserPrompt(biomarkerData: BiomarkerValue[]): string {
-    const recentData = biomarkerData.slice(-10);
-    return `Analyze the following biomarker trend data and provide insights:\n${JSON.stringify(recentData, null, 2)}`;
+    // Group by type and take the most recent readings per type for a comprehensive view
+    const byType: Record<string, { value: number; unit: string; timestamp: Date }[]> = {};
+    for (const entry of biomarkerData) {
+      if (!byType[entry.type]) {
+        byType[entry.type] = [];
+      }
+      byType[entry.type].push({
+        value: entry.value,
+        unit: entry.unit,
+        timestamp: entry.timestamp,
+      });
+    }
+
+    // Keep at most 5 recent readings per type
+    const grouped: Record<string, { value: number; unit: string; timestamp: Date }[]> = {};
+    for (const [type, readings] of Object.entries(byType)) {
+      grouped[type] = readings
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 5);
+    }
+
+    return `Analyze the following biomarker trend data (grouped by type, most recent first) and provide insights:\n${JSON.stringify(grouped, null, 2)}`;
   }
 
   /**

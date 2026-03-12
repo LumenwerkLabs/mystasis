@@ -1,4 +1,4 @@
-import { registerAs } from '@nestjs/config';
+import { DatabaseConfig } from './database.config';
 
 /**
  * TDD Tests for DatabaseConfig
@@ -12,7 +12,7 @@ import { registerAs } from '@nestjs/config';
  */
 
 // Import the config - will fail until implemented
-let databaseConfig: ReturnType<typeof registerAs>;
+let databaseConfig: () => DatabaseConfig;
 let isValidDatabaseUrl: (url: string) => boolean;
 
 beforeAll(async () => {
@@ -186,7 +186,7 @@ describe('DatabaseConfig', () => {
       expect(config.poolMin).toBeDefined();
       expect(config.poolMax).toBeDefined();
       expect(config.poolMin).toBeGreaterThanOrEqual(1);
-      expect(config.poolMax).toBeGreaterThanOrEqual(config.poolMin as number);
+      expect(config.poolMax).toBeGreaterThanOrEqual(config.poolMin);
     });
   });
 

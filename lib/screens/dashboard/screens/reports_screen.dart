@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/models/llm_summary_model.dart';
+import 'package:mystasis/core/widgets/medical_disclaimer.dart';
+import 'package:mystasis/providers/insights_provider.dart';
 
 class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
+  final String? patientId;
+
+  const ReportsScreen({super.key, this.patientId});
 
   @override
   State<ReportsScreen> createState() => _ReportsPageState();
@@ -22,6 +28,50 @@ class _ReportsPageState extends State<ReportsScreen>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showGenerateDialog() {
+    if (widget.patientId == null) return;
+
+    // Clinician-relevant summary types only
+    const types = [
+      SummaryType.weeklySummary,
+      SummaryType.trendAnalysis,
+      SummaryType.riskAssessment,
+      SummaryType.clinicianReport,
+    ];
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Generate AI Report'),
+        children: types.map((type) {
+          return SimpleDialogOption(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<InsightsProvider>().generateSummary(
+                    widget.patientId!,
+                    type,
+                  );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(
+                    _getTypeIcon(type),
+                    color: _getTypeColor(type),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(type.displayName),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 
   @override
@@ -44,7 +94,7 @@ class _ReportsPageState extends State<ReportsScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Patient health reports and analysis history',
+                    'AI-generated health reports and analysis',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: MystasisTheme.neutralGrey,
                     ),
@@ -52,8 +102,8 @@ class _ReportsPageState extends State<ReportsScreen>
                 ],
               ),
               ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add, size: 20),
+                onPressed: widget.patientId != null ? _showGenerateDialog : null,
+                icon: const Icon(Icons.auto_awesome, size: 20),
                 label: const Text('Generate Report'),
               ),
             ],
@@ -85,7 +135,7 @@ class _ReportsPageState extends State<ReportsScreen>
             labelColor: MystasisTheme.deepGraphite,
             unselectedLabelColor: MystasisTheme.neutralGrey,
             tabs: const [
-              Tab(text: 'All Reports'),
+              Tab(text: 'AI Insights'),
               Tab(text: 'Lab Analysis'),
               Tab(text: 'Progress'),
             ],
@@ -97,7 +147,11 @@ class _ReportsPageState extends State<ReportsScreen>
         Expanded(
           child: TabBarView(
             controller: _tabController,
-            children: [_AllReportsTab(), _LabAnalysisTab(), _ProgressTab()],
+            children: [
+              _AIInsightsTab(patientId: widget.patientId),
+              _LabAnalysisTab(),
+              _ProgressTab(),
+            ],
           ),
         ),
       ],
@@ -105,87 +159,130 @@ class _ReportsPageState extends State<ReportsScreen>
   }
 }
 
-class _AllReportsTab extends StatelessWidget {
+// ── AI Insights Tab (real data) ──────────────────────────────────────
+
+class _AIInsightsTab extends StatelessWidget {
+  final String? patientId;
+
+  const _AIInsightsTab({this.patientId});
+
   @override
   Widget build(BuildContext context) {
-    final reports = [
-      _Report(
-        title: 'Quarterly Health Review Q4 2025',
-        type: 'Comprehensive',
-        date: 'Dec 28, 2025',
-        status: 'complete',
-        screens: 12,
-      ),
-      _Report(
-        title: 'Cardiovascular Risk Assessment',
-        type: 'Specialized',
-        date: 'Dec 15, 2025',
-        status: 'complete',
-        screens: 6,
-      ),
-      _Report(
-        title: 'Hormonal Panel Analysis',
-        type: 'Lab Analysis',
-        date: 'Dec 10, 2025',
-        status: 'complete',
-        screens: 8,
-      ),
-      _Report(
-        title: 'Monthly Progress Report - November',
-        type: 'Progress',
-        date: 'Nov 30, 2025',
-        status: 'complete',
-        screens: 4,
-      ),
-      _Report(
-        title: 'Metabolic Health Assessment',
-        type: 'Specialized',
-        date: 'Nov 20, 2025',
-        status: 'complete',
-        screens: 7,
-      ),
-      _Report(
-        title: 'Quarterly Health Review Q3 2025',
-        type: 'Comprehensive',
-        date: 'Sep 28, 2025',
-        status: 'complete',
-        screens: 11,
-      ),
-    ];
+    return Consumer<InsightsProvider>(
+      builder: (context, provider, _) {
+        // Generating state
+        if (provider.isGenerating) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 16),
+                Text(
+                  'Generating AI insights...',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This may take a few moments.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      itemCount: reports.length,
-      itemBuilder: (context, index) => _ReportCard(report: reports[index]),
+        // Error state
+        if (provider.errorMessage != null) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: MystasisTheme.errorRed),
+                const SizedBox(height: 16),
+                Text(
+                  provider.errorMessage!,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16),
+                if (patientId != null)
+                  ElevatedButton(
+                    onPressed: () => provider.generateSummary(
+                      patientId!,
+                      SummaryType.weeklySummary,
+                    ),
+                    child: const Text('Retry'),
+                  ),
+              ],
+            ),
+          );
+        }
+
+        // Empty state
+        if (provider.summaries.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.auto_awesome_outlined,
+                  size: 64,
+                  color: MystasisTheme.neutralGrey.withValues(alpha: 0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No AI insights generated yet',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Click "Generate Report" to create an AI-powered\nhealth analysis for this patient.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // Summaries list
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          itemCount: provider.summaries.length,
+          itemBuilder: (context, index) =>
+              _InsightCard(summary: provider.summaries[index]),
+        );
+      },
     );
   }
 }
 
-class _Report {
-  final String title;
-  final String type;
-  final String date;
-  final String status;
-  final int screens;
+class _InsightCard extends StatefulWidget {
+  final LlmSummaryModel summary;
 
-  _Report({
-    required this.title,
-    required this.type,
-    required this.date,
-    required this.status,
-    required this.screens,
-  });
+  const _InsightCard({required this.summary});
+
+  @override
+  State<_InsightCard> createState() => _InsightCardState();
 }
 
-class _ReportCard extends StatelessWidget {
-  final _Report report;
-
-  const _ReportCard({required this.report});
+class _InsightCardState extends State<_InsightCard> {
+  bool _isExpanded = true;
 
   @override
   Widget build(BuildContext context) {
+    final summary = widget.summary;
+    final typeColor = _getTypeColor(summary.type);
+    final structured = summary.structuredData;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -198,118 +295,261 @@ class _ReportCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _getTypeColor().withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(_getTypeIcon(), color: _getTypeColor(), size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  report.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+          // Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: typeColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 4),
-                Row(
+                child: Icon(
+                  _getTypeIcon(summary.type),
+                  color: typeColor,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getTypeColor().withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        report.type,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: _getTypeColor(),
+                    Text(
+                      summary.type.displayName,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: MystasisTheme.cellularBlue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'AI Generated',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(color: MystasisTheme.cellularBlue),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      report.date,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '${report.screens} screens',
-                      style: Theme.of(context).textTheme.bodySmall,
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDateTime(summary.generatedAt),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.visibility_outlined),
-                color: MystasisTheme.neutralGrey,
-                onPressed: () {},
-                tooltip: 'View',
               ),
               IconButton(
-                icon: const Icon(Icons.download_outlined),
-                color: MystasisTheme.neutralGrey,
-                onPressed: () {},
-                tooltip: 'Download',
-              ),
-              IconButton(
-                icon: const Icon(Icons.share_outlined),
-                color: MystasisTheme.neutralGrey,
-                onPressed: () {},
-                tooltip: 'Share',
+                icon: Icon(
+                  _isExpanded ? Icons.expand_less : Icons.expand_more,
+                ),
+                onPressed: () => setState(() => _isExpanded = !_isExpanded),
               ),
             ],
           ),
+
+          if (_isExpanded) ...[
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+
+            // Content
+            Text(
+              summary.content,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                height: 1.6,
+              ),
+            ),
+
+            // Structured data sections
+            if (structured != null && !structured.isEmpty) ...[
+              const SizedBox(height: 16),
+
+              // Flags
+              if (structured.flags != null && structured.flags!.isNotEmpty) ...[
+                _SectionHeader(
+                  icon: Icons.flag_outlined,
+                  title: 'Flags',
+                  color: MystasisTheme.signalAmber,
+                ),
+                const SizedBox(height: 8),
+                ...structured.flags!.map((f) => _BulletItem(
+                      text: f,
+                      color: MystasisTheme.signalAmber,
+                    )),
+                const SizedBox(height: 12),
+              ],
+
+              // Recommendations
+              if (structured.recommendations != null &&
+                  structured.recommendations!.isNotEmpty) ...[
+                _SectionHeader(
+                  icon: Icons.lightbulb_outline,
+                  title: 'Recommendations',
+                  color: MystasisTheme.softAlgae,
+                ),
+                const SizedBox(height: 8),
+                ...structured.recommendations!.map((r) => _BulletItem(
+                      text: r,
+                      color: MystasisTheme.softAlgae,
+                    )),
+                const SizedBox(height: 12),
+              ],
+
+              // Questions for Doctor
+              if (structured.questionsForDoctor != null &&
+                  structured.questionsForDoctor!.isNotEmpty) ...[
+                _SectionHeader(
+                  icon: Icons.help_outline,
+                  title: 'Consider Discussing',
+                  color: MystasisTheme.deepBioTeal,
+                ),
+                const SizedBox(height: 8),
+                ...structured.questionsForDoctor!.map((q) => _BulletItem(
+                      text: q,
+                      color: MystasisTheme.deepBioTeal,
+                    )),
+                const SizedBox(height: 12),
+              ],
+            ],
+
+            const SizedBox(height: 12),
+            const MedicalDisclaimer(),
+          ],
         ],
       ),
     );
   }
 
-  Color _getTypeColor() {
-    switch (report.type) {
-      case 'Comprehensive':
-        return MystasisTheme.deepBioTeal;
-      case 'Specialized':
-        return MystasisTheme.softAlgae;
-      case 'Lab Analysis':
-        return MystasisTheme.cellularBlue;
-      case 'Progress':
-        return MystasisTheme.signalAmber;
-      default:
-        return MystasisTheme.neutralGrey;
-    }
-  }
-
-  IconData _getTypeIcon() {
-    switch (report.type) {
-      case 'Comprehensive':
-        return Icons.assessment;
-      case 'Specialized':
-        return Icons.science;
-      case 'Lab Analysis':
-        return Icons.biotech;
-      case 'Progress':
-        return Icons.trending_up;
-      default:
-        return Icons.description;
-    }
+  String _formatDateTime(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final hour = dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year} at $hour:$min $amPm';
   }
 }
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Text(
+          title,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BulletItem extends StatelessWidget {
+  final String text;
+  final Color color;
+
+  const _BulletItem({required this.text, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 22, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 7),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.6),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Helper functions for type styling ────────────────────────────────
+
+Color _getTypeColor(SummaryType type) {
+  switch (type) {
+    case SummaryType.weeklySummary:
+      return MystasisTheme.deepBioTeal;
+    case SummaryType.trendAnalysis:
+      return MystasisTheme.softAlgae;
+    case SummaryType.riskAssessment:
+      return MystasisTheme.signalAmber;
+    case SummaryType.clinicianReport:
+      return MystasisTheme.cellularBlue;
+    case SummaryType.dailyRecap:
+      return MystasisTheme.deepBioTeal;
+    case SummaryType.wellnessNudge:
+      return MystasisTheme.softAlgae;
+  }
+}
+
+IconData _getTypeIcon(SummaryType type) {
+  switch (type) {
+    case SummaryType.weeklySummary:
+      return Icons.assessment;
+    case SummaryType.trendAnalysis:
+      return Icons.trending_up;
+    case SummaryType.riskAssessment:
+      return Icons.warning_amber_outlined;
+    case SummaryType.clinicianReport:
+      return Icons.description_outlined;
+    case SummaryType.dailyRecap:
+      return Icons.today;
+    case SummaryType.wellnessNudge:
+      return Icons.self_improvement;
+  }
+}
+
+// ── Lab Analysis Tab (mock, unchanged) ───────────────────────────────
 
 class _LabAnalysisTab extends StatelessWidget {
   @override
@@ -497,6 +737,8 @@ class _LabResultCard extends StatelessWidget {
     );
   }
 }
+
+// ── Progress Tab (mock, unchanged) ───────────────────────────────────
 
 class _ProgressTab extends StatelessWidget {
   @override
@@ -692,7 +934,7 @@ class _TimelineItem extends StatelessWidget {
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
-                  color: _getTypeColor(),
+                  color: _getTimelineColor(),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -728,13 +970,13 @@ class _TimelineItem extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: _getTypeColor().withValues(alpha: 0.12),
+                          color: _getTimelineColor().withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           _getTypeLabel(),
                           style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(color: _getTypeColor()),
+                              ?.copyWith(color: _getTimelineColor()),
                         ),
                       ),
                     ],
@@ -762,7 +1004,7 @@ class _TimelineItem extends StatelessWidget {
     );
   }
 
-  Color _getTypeColor() {
+  Color _getTimelineColor() {
     switch (item.type) {
       case 'milestone':
         return MystasisTheme.deepBioTeal;

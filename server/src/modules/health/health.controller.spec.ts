@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HealthCheckService } from '@nestjs/terminus';
 import { HealthController } from './health.controller';
 import { PrismaHealthIndicator } from './prisma.health';
+import { LlmHealthIndicator } from './llm.health';
+import { OpenMedHealthIndicator } from './openmed.health';
 
 /**
  * TDD Tests for HealthController
@@ -25,14 +27,16 @@ interface MockHealthCheckService {
   check: jest.Mock;
 }
 
-interface MockPrismaHealthIndicator {
+interface MockHealthIndicator {
   isHealthy: jest.Mock;
 }
 
 describe('HealthController', () => {
   let controller: HealthController;
   let mockHealthCheckService: MockHealthCheckService;
-  let mockPrismaHealthIndicator: MockPrismaHealthIndicator;
+  let mockPrismaHealthIndicator: MockHealthIndicator;
+  let mockLlmHealthIndicator: MockHealthIndicator;
+  let mockOpenMedHealthIndicator: MockHealthIndicator;
 
   beforeEach(async () => {
     // Create fresh mocks for each test
@@ -41,6 +45,14 @@ describe('HealthController', () => {
     };
 
     mockPrismaHealthIndicator = {
+      isHealthy: jest.fn(),
+    };
+
+    mockLlmHealthIndicator = {
+      isHealthy: jest.fn(),
+    };
+
+    mockOpenMedHealthIndicator = {
       isHealthy: jest.fn(),
     };
 
@@ -56,6 +68,14 @@ describe('HealthController', () => {
         {
           provide: PrismaHealthIndicator,
           useValue: mockPrismaHealthIndicator,
+        },
+        {
+          provide: LlmHealthIndicator,
+          useValue: mockLlmHealthIndicator,
+        },
+        {
+          provide: OpenMedHealthIndicator,
+          useValue: mockOpenMedHealthIndicator,
         },
       ],
     }).compile();

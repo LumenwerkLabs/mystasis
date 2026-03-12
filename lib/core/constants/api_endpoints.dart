@@ -33,6 +33,18 @@ class ApiEndpoints {
   static const String biomarkers = '/health-data/biomarkers';
   static const String alerts = '/alerts';
 
+  // Parameterized health data helpers
+  static String biomarkersForUser(String userId) =>
+      '/health-data/biomarkers/$userId';
+  static String latestBiomarker(String userId, String type) =>
+      '/health-data/biomarkers/$userId/latest/$type';
+  static String biomarkerTrend(String userId, String type) =>
+      '/health-data/biomarkers/$userId/trend/$type';
+
+  // LLM endpoints
+  static String llmSummary(String userId) => '/llm/summary/$userId';
+  static String llmNudge(String userId) => '/llm/nudge/$userId';
+
   // User endpoints
   static const String users = '/users';
 }

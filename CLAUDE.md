@@ -26,6 +26,7 @@
 | Build APK | `flutter build apk` |
 | Build iOS | `flutter build ios` |
 | Build web | `flutter build web` |
+| Seed database | `cd server && npx prisma db seed` |
 
 ---
 
@@ -33,19 +34,27 @@
 
 ```
 lib/
-├── main.dart                      # App entry point
+├── main.dart                      # App entry point (MultiProvider setup)
 ├── app.dart                       # MaterialApp configuration
 ├── core/
 │   ├── theme/
 │   │   └── theme.dart             # Design system: colors, typography, components
 │   ├── constants/
-│   │   └── api_endpoints.dart     # API URL constants
+│   │   └── api_endpoints.dart     # API URL constants + parameterized helpers
+│   ├── models/
+│   │   ├── biomarker_model.dart   # BiomarkerModel with reference ranges, status
+│   │   └── paginated_response.dart # Generic PaginatedResponse<T>
 │   ├── services/
 │   │   ├── api_client.dart        # HTTP client for backend communication
 │   │   ├── auth_service.dart      # Token management
-│   │   └── storage_service.dart   # Local persistence
+│   │   ├── health_data_service.dart # Biomarker CRUD (getBiomarkers, trends)
+│   │   ├── storage_service.dart   # Local persistence
+│   │   └── users_service.dart     # User/patient list fetching
 │   ├── utils/                     # Shared utility functions
 │   └── widgets/                   # Reusable UI components
+├── providers/
+│   ├── biomarkers_provider.dart   # BiomarkersProvider (ChangeNotifier)
+│   └── patients_provider.dart     # PatientsProvider (ChangeNotifier)
 ├── features/
 │   ├── auth/
 │   │   ├── screens/
@@ -138,39 +147,49 @@ features/[feature]/
 
 ## State Management
 
-**Approach:** [Riverpod/BLoC/Provider] — use consistently across all features
+**Approach:** Provider (ChangeNotifier) via `MultiProvider` in `main.dart`
+
+**Active Providers:**
+
+| Provider | Location | Responsibility |
+|----------|----------|----------------|
+| `AuthProvider` | `features/auth/` | Login state, token management |
+| `PatientsProvider` | `providers/patients_provider.dart` | Patient list, selected patient |
+| `BiomarkersProvider` | `providers/biomarkers_provider.dart` | Biomarker data, grouping by type |
 
 ### Pattern
 
 ```dart
-// Controller holds business logic and state
-class BiomarkerController extends StateNotifier<BiomarkerState> {
-  final ApiClient _apiClient;
-  
-  BiomarkerController(this._apiClient) : super(BiomarkerState.initial());
-  
+// Provider holds business logic and state
+class BiomarkersProvider extends ChangeNotifier {
+  final HealthDataService _healthDataService;
+
+  List<BiomarkerModel> _biomarkers = [];
+  bool _isLoading = false;
+  String? _error;
+
   Future<void> loadBiomarkers(String userId) async {
-    state = state.copyWith(isLoading: true);
+    _isLoading = true;
+    notifyListeners();
     try {
-      final biomarkers = await _apiClient.getBiomarkers(userId);
-      state = state.copyWith(biomarkers: biomarkers, isLoading: false);
+      _biomarkers = await _healthDataService.getBiomarkers(userId);
+      _error = null;
     } catch (e) {
-      state = state.copyWith(error: e.toString(), isLoading: false);
+      _error = e.toString();
     }
+    _isLoading = false;
+    notifyListeners();
   }
 }
 
-// Widget consumes state, no business logic
-class BiomarkerScreen extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(biomarkerControllerProvider);
-    
-    if (state.isLoading) return LoadingIndicator();
-    if (state.error != null) return ErrorDisplay(state.error!);
-    return BiomarkerList(biomarkers: state.biomarkers);
-  }
-}
+// Widget consumes state via Consumer, no business logic
+Consumer<BiomarkersProvider>(
+  builder: (context, provider, child) {
+    if (provider.isLoading) return LoadingIndicator();
+    if (provider.error != null) return ErrorDisplay(provider.error!);
+    return BiomarkerList(biomarkers: provider.biomarkers);
+  },
+)
 ```
 
 ---
@@ -212,7 +231,15 @@ class DashboardScreen extends StatelessWidget {
 
 ## API Communication
 
-**Location:** `lib/core/services/api_client.dart`
+**Location:** `lib/core/services/`
+
+**Services:**
+
+| Service | File | Endpoints |
+|---------|------|-----------|
+| `ApiClient` | `api_client.dart` | Base HTTP client (Dio) with auth headers |
+| `HealthDataService` | `health_data_service.dart` | `getBiomarkers`, `getLatestBiomarker`, `getTrend` |
+| `UsersService` | `users_service.dart` | `getUsers`, `getUser` |
 
 ### Pattern
 
@@ -240,7 +267,14 @@ class ApiClient {
 
 ## Domain Models
 
-**Location:** `lib/shared/models/`
+**Locations:** `lib/core/models/` (core models) and `lib/shared/models/` (shared across features)
+
+**Core Models:**
+
+| Model | File | Description |
+|-------|------|-------------|
+| `BiomarkerModel` | `core/models/biomarker_model.dart` | Biomarker with `fromJson`/`toJson`, `displayName`, `category`, `status`, reference ranges |
+| `PaginatedResponse<T>` | `core/models/paginated_response.dart` | Generic wrapper matching backend pagination format (`data`, `total`, `page`, `limit`) |
 
 ### Pattern
 

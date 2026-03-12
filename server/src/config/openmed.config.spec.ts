@@ -1,4 +1,5 @@
-import { registerAs } from '@nestjs/config';
+import { OpenMedConfig } from './openmed.config';
+import { ConfigFactoryKeyHost } from '@nestjs/config';
 
 /**
  * TDD Tests for OpenMed Configuration
@@ -21,9 +22,9 @@ import { registerAs } from '@nestjs/config';
  */
 
 // Import the config - will fail until implemented
-let openmedConfig: ReturnType<typeof registerAs>;
+let openmedConfig: (() => OpenMedConfig) & ConfigFactoryKeyHost;
 
-beforeAll(async () => {
+beforeAll(() => {
   try {
     // Dynamic require to allow tests to compile before implementation exists
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -632,7 +633,7 @@ describe('OpenMedConfig', () => {
   // ============================================
 
   describe('OpenMedConfig interface', () => {
-    it('should export OpenMedConfig interface type', async () => {
+    it('should export OpenMedConfig interface type', () => {
       // This test verifies the interface is exported
       // The actual type checking is done by TypeScript at compile time
       if (!openmedConfig) return;

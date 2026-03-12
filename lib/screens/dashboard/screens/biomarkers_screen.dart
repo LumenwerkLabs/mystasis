@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/models/biomarker_model.dart';
+import 'package:mystasis/providers/biomarkers_provider.dart';
 
 class BiomarkersScreen extends StatefulWidget {
-  const BiomarkersScreen({super.key});
+  final String? patientId;
+
+  const BiomarkersScreen({super.key, this.patientId});
 
   @override
   State<BiomarkersScreen> createState() => _BiomarkersPageState();
@@ -21,269 +26,186 @@ class _BiomarkersPageState extends State<BiomarkersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Biomarkers',
-                    style: Theme.of(context).textTheme.headlineLarge,
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        if (provider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (provider.errorMessage != null) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: MystasisTheme.errorRed),
+                const SizedBox(height: 16),
+                Text(
+                  provider.errorMessage!,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16),
+                if (widget.patientId != null)
+                  ElevatedButton(
+                    onPressed: () => provider.reloadBiomarkers(widget.patientId!),
+                    child: const Text('Retry'),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '47 markers tracked across 6 categories',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: MystasisTheme.neutralGrey,
-                    ),
+              ],
+            ),
+          );
+        }
+
+        // Group biomarkers by type, get latest reading per type plus history
+        final grouped = provider.groupedByType;
+        final biomarkerCards = <_BiomarkerCardData>[];
+
+        for (final entry in grouped.entries) {
+          final readings = entry.value
+            ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          final latest = readings.last;
+          final history = readings.map((r) => r.value).toList();
+          final range = BiomarkerModel.referenceRanges[latest.type];
+
+          biomarkerCards.add(_BiomarkerCardData(
+            name: latest.displayName,
+            category: latest.category,
+            value: latest.value,
+            unit: latest.unit,
+            optimalMin: range?.$1 ?? 0,
+            optimalMax: range?.$2 ?? 100,
+            history: history,
+            lastUpdated: _formatDate(latest.timestamp),
+            statusOverride: latest.status,
+          ));
+        }
+
+        final filteredCards = biomarkerCards.where(
+          (b) => _selectedCategory == 'All' || b.category == _selectedCategory,
+        );
+
+        final markerCount = biomarkerCards.length;
+        final categoryCount = biomarkerCards.map((b) => b.category).toSet().length;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Biomarkers',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$markerCount markers tracked across $categoryCount categories',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: MystasisTheme.neutralGrey,
+                        ),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('Upload Results'),
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () {},
-                icon: const Icon(Icons.add, size: 20),
-                label: const Text('Upload Results'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-          // Category filters
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: _categories.map((cat) {
-                final isSelected = cat == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(cat),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() => _selectedCategory = cat);
-                    },
-                    selectedColor: MystasisTheme.deepBioTeal.withValues(
-                      alpha: 0.15,
-                    ),
-                    checkmarkColor: MystasisTheme.deepBioTeal,
-                    labelStyle: TextStyle(
-                      color: isSelected
-                          ? MystasisTheme.deepBioTeal
-                          : MystasisTheme.deepGraphite,
-                      fontWeight: isSelected
-                          ? FontWeight.w500
-                          : FontWeight.w400,
+              // Category filters
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _categories.map((cat) {
+                    final isSelected = cat == _selectedCategory;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(cat),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() => _selectedCategory = cat);
+                        },
+                        selectedColor: MystasisTheme.deepBioTeal.withValues(
+                          alpha: 0.15,
+                        ),
+                        checkmarkColor: MystasisTheme.deepBioTeal,
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? MystasisTheme.deepBioTeal
+                              : MystasisTheme.deepGraphite,
+                          fontWeight: isSelected
+                              ? FontWeight.w500
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              if (filteredCards.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(48),
+                    child: Text(
+                      'No biomarkers found for this category.',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: MystasisTheme.neutralGrey,
+                      ),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
+                )
+              else
+                // Biomarker cards grid
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final crossAxisCount = constraints.maxWidth > 1200
+                        ? 3
+                        : constraints.maxWidth > 800
+                        ? 2
+                        : 1;
+                    return Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: filteredCards
+                          .map(
+                            (b) => SizedBox(
+                              width: (constraints.maxWidth -
+                                      (crossAxisCount - 1) * 16) /
+                                  crossAxisCount,
+                              child: _BiomarkerCard(biomarker: b),
+                            ),
+                          )
+                          .toList(),
+                    );
+                  },
+                ),
+            ],
           ),
-          const SizedBox(height: 24),
-
-          // Biomarker cards grid
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final crossAxisCount = constraints.maxWidth > 1200
-                  ? 3
-                  : constraints.maxWidth > 800
-                  ? 2
-                  : 1;
-              return Wrap(
-                spacing: 16,
-                runSpacing: 16,
-                children: _getMockBiomarkers()
-                    .where(
-                      (b) =>
-                          _selectedCategory == 'All' ||
-                          b.category == _selectedCategory,
-                    )
-                    .map(
-                      (b) => SizedBox(
-                        width:
-                            (constraints.maxWidth - (crossAxisCount - 1) * 16) /
-                            crossAxisCount,
-                        child: _BiomarkerCard(biomarker: b),
-                      ),
-                    )
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  List<_Biomarker> _getMockBiomarkers() {
-    return [
-      // Metabolic
-      _Biomarker(
-        name: 'Fasting Glucose',
-        category: 'Metabolic',
-        value: 92,
-        unit: 'mg/dL',
-        optimalMin: 70,
-        optimalMax: 100,
-        history: [95, 98, 94, 92],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'HbA1c',
-        category: 'Metabolic',
-        value: 5.2,
-        unit: '%',
-        optimalMin: 4.0,
-        optimalMax: 5.6,
-        history: [5.4, 5.3, 5.3, 5.2],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'Fasting Insulin',
-        category: 'Metabolic',
-        value: 6.8,
-        unit: 'μIU/mL',
-        optimalMin: 2.0,
-        optimalMax: 8.0,
-        history: [8.2, 7.5, 7.1, 6.8],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      // Cardiovascular
-      _Biomarker(
-        name: 'LDL Cholesterol',
-        category: 'Cardiovascular',
-        value: 118,
-        unit: 'mg/dL',
-        optimalMin: 0,
-        optimalMax: 100,
-        history: [125, 122, 120, 118],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'HDL Cholesterol',
-        category: 'Cardiovascular',
-        value: 62,
-        unit: 'mg/dL',
-        optimalMin: 60,
-        optimalMax: 100,
-        history: [55, 58, 60, 62],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'Triglycerides',
-        category: 'Cardiovascular',
-        value: 85,
-        unit: 'mg/dL',
-        optimalMin: 0,
-        optimalMax: 100,
-        history: [110, 98, 92, 85],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'ApoB',
-        category: 'Cardiovascular',
-        value: 92,
-        unit: 'mg/dL',
-        optimalMin: 0,
-        optimalMax: 90,
-        history: [98, 95, 94, 92],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      // Inflammatory
-      _Biomarker(
-        name: 'hsCRP',
-        category: 'Inflammatory',
-        value: 0.8,
-        unit: 'mg/L',
-        optimalMin: 0,
-        optimalMax: 1.0,
-        history: [1.2, 1.0, 0.9, 0.8],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'Homocysteine',
-        category: 'Inflammatory',
-        value: 8.5,
-        unit: 'μmol/L',
-        optimalMin: 5,
-        optimalMax: 10,
-        history: [11.2, 10.1, 9.2, 8.5],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      // Hormonal
-      _Biomarker(
-        name: 'Testosterone (Total)',
-        category: 'Hormonal',
-        value: 620,
-        unit: 'ng/dL',
-        optimalMin: 500,
-        optimalMax: 900,
-        history: [580, 595, 610, 620],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'DHEA-S',
-        category: 'Hormonal',
-        value: 285,
-        unit: 'μg/dL',
-        optimalMin: 200,
-        optimalMax: 400,
-        history: [260, 270, 278, 285],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'TSH',
-        category: 'Hormonal',
-        value: 1.8,
-        unit: 'mIU/L',
-        optimalMin: 0.5,
-        optimalMax: 2.5,
-        history: [2.1, 2.0, 1.9, 1.8],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      // Vitamins
-      _Biomarker(
-        name: 'Vitamin D (25-OH)',
-        category: 'Vitamins',
-        value: 52,
-        unit: 'ng/mL',
-        optimalMin: 40,
-        optimalMax: 80,
-        history: [35, 42, 48, 52],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'Vitamin B12',
-        category: 'Vitamins',
-        value: 680,
-        unit: 'pg/mL',
-        optimalMin: 500,
-        optimalMax: 1000,
-        history: [520, 580, 640, 680],
-        lastUpdated: 'Dec 28, 2025',
-      ),
-      _Biomarker(
-        name: 'Ferritin',
-        category: 'Vitamins',
-        value: 125,
-        unit: 'ng/mL',
-        optimalMin: 50,
-        optimalMax: 200,
-        history: [95, 108, 118, 125],
-        lastUpdated: 'Dec 28, 2025',
-      ),
+  String _formatDate(DateTime date) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 }
 
-class _Biomarker {
+class _BiomarkerCardData {
   final String name;
   final String category;
   final double value;
@@ -292,8 +214,9 @@ class _Biomarker {
   final double optimalMax;
   final List<double> history;
   final String lastUpdated;
+  final String statusOverride;
 
-  _Biomarker({
+  _BiomarkerCardData({
     required this.name,
     required this.category,
     required this.value,
@@ -302,16 +225,10 @@ class _Biomarker {
     required this.optimalMax,
     required this.history,
     required this.lastUpdated,
+    required this.statusOverride,
   });
 
-  String get status {
-    if (value >= optimalMin && value <= optimalMax) return 'optimal';
-    final range = optimalMax - optimalMin;
-    if (value < optimalMin - range * 0.2 || value > optimalMax + range * 0.2) {
-      return 'critical';
-    }
-    return 'borderline';
-  }
+  String get status => statusOverride;
 
   double get trend {
     if (history.length < 2) return 0;
@@ -320,7 +237,7 @@ class _Biomarker {
 }
 
 class _BiomarkerCard extends StatelessWidget {
-  final _Biomarker biomarker;
+  final _BiomarkerCardData biomarker;
 
   const _BiomarkerCard({required this.biomarker});
 
@@ -468,7 +385,6 @@ class _BiomarkerCard extends StatelessWidget {
   }
 
   Color _getTrendColor() {
-    // For most biomarkers, trending toward optimal is good
     if (biomarker.status == 'optimal') return MystasisTheme.softAlgae;
     return biomarker.trend > 0
         ? MystasisTheme.signalAmber
@@ -537,5 +453,6 @@ class _MiniChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _MiniChartPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.color != color;
 }

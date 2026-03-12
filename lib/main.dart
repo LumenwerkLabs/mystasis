@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/providers/auth_provider.dart';
+import 'package:mystasis/providers/patients_provider.dart';
+import 'package:mystasis/providers/biomarkers_provider.dart';
+import 'package:mystasis/providers/insights_provider.dart';
 import 'package:mystasis/screens/auth/login_screen.dart';
 import 'package:mystasis/screens/auth/signup_screen.dart';
 import 'package:mystasis/screens/auth/forgot_password_screen.dart';
@@ -17,8 +20,13 @@ class MystasisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PatientsProvider()),
+        ChangeNotifierProvider(create: (_) => BiomarkersProvider()),
+        ChangeNotifierProvider(create: (_) => InsightsProvider()),
+      ],
       child: MaterialApp(
         title: 'Mystasis',
         debugShowCheckedModeBanner: false,
