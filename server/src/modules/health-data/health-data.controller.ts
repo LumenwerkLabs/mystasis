@@ -22,12 +22,14 @@ import { BiomarkerType, UserRole } from '@prisma/client';
 import { HealthDataService } from './health-data.service';
 import { CreateBiomarkerDto } from './dto/create-biomarker.dto';
 import { WearableSyncDto } from './dto/wearable-sync.dto';
+import { PatientSyncDto } from './dto/patient-sync.dto';
 import { GetBiomarkersQueryDto } from './dto/get-biomarkers-query.dto';
 import { GetTrendQueryDto } from './dto/get-trend-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Throttle } from '../../common/decorators/throttle.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
 
 /**
@@ -212,6 +214,63 @@ export class HealthDataController {
   async syncWearableData(@Body() dto: WearableSyncDto) {
     const biomarkersToCreate = dto.biomarkers.map((biomarker) => ({
       userId: dto.userId,
+      type: biomarker.type,
+      value: biomarker.value,
+      unit: biomarker.unit,
+      timestamp: new Date(biomarker.timestamp),
+      source: biomarker.source,
+    }));
+
+    return this.healthDataService.createMany(biomarkersToCreate);
+  }
+
+  /**
+   * Patient-initiated health data sync (e.g., Apple Health).
+   *
+   * @description Creates multiple biomarker entries from a patient's own
+   * health data source. The userId is inferred from the JWT token.
+   *
+   * @param dto - Biomarkers array (without userId)
+   * @param user - The authenticated user from JWT token
+   * @returns Count of created records
+   */
+  @Post('sync/me')
+  @Throttle(30, 60)
+  @Roles(UserRole.PATIENT)
+  @ApiOperation({
+    summary: 'Sync health data from patient device (e.g., Apple Health)',
+    description:
+      'Creates multiple biomarker entries from a patient\'s own health data source. The userId is inferred from the JWT token, ensuring patients can only sync to their own account. Max 1000 biomarkers per request.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Health data synced successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        count: {
+          type: 'number',
+          description: 'Number of biomarkers created',
+          example: 150,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation error - invalid data or exceeds 1000 biomarker limit',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - missing or invalid JWT token',
+  })
+  async syncMyHealthData(
+    @Body() dto: PatientSyncDto,
+    @CurrentUser() user: UserPayload,
+  ) {
+    const biomarkersToCreate = dto.biomarkers.map((biomarker) => ({
+      userId: user.sub,
       type: biomarker.type,
       value: biomarker.value,
       unit: biomarker.unit,

@@ -36,37 +36,118 @@ interface DateRangeOptions {
  * - Hormones: ng/dL, mcg/dL, mIU/L
  */
 const BIOMARKER_UNITS: Record<BiomarkerType, string> = {
+  // Cardiovascular
   HEART_RATE: 'bpm',
   HEART_RATE_VARIABILITY: 'ms',
   BLOOD_PRESSURE_SYSTOLIC: 'mmHg',
   BLOOD_PRESSURE_DIASTOLIC: 'mmHg',
   RESTING_HEART_RATE: 'bpm',
+  WALKING_HEART_RATE: 'bpm',
+  // Vitals
+  BLOOD_OXYGEN: '%',
+  RESPIRATORY_RATE: 'breaths/min',
+  BODY_TEMPERATURE: '°C',
+  PERIPHERAL_PERFUSION_INDEX: '%',
+  // Metabolic
   GLUCOSE: 'mg/dL',
   HBA1C: '%',
   CHOLESTEROL_TOTAL: 'mg/dL',
   CHOLESTEROL_LDL: 'mg/dL',
   CHOLESTEROL_HDL: 'mg/dL',
   TRIGLYCERIDES: 'mg/dL',
+  // Fitness
   STEPS: 'steps',
   ACTIVE_CALORIES: 'kcal',
+  BASAL_CALORIES: 'kcal',
   SLEEP_DURATION: 'hours',
   SLEEP_QUALITY: 'score',
+  SLEEP_DEEP: 'min',
+  SLEEP_REM: 'min',
+  SLEEP_LIGHT: 'min',
+  SLEEP_AWAKE: 'min',
   VO2_MAX: 'mL/kg/min',
+  EXERCISE_TIME: 'min',
+  DISTANCE_WALKING_RUNNING: 'km',
+  DISTANCE_SWIMMING: 'm',
+  DISTANCE_CYCLING: 'km',
+  FLIGHTS_CLIMBED: 'flights',
+  // Body composition
   WEIGHT: 'kg',
   BMI: 'kg/m2',
   BODY_FAT_PERCENTAGE: '%',
+  HEIGHT: 'cm',
+  WAIST_CIRCUMFERENCE: 'cm',
+  // Hydration
+  WATER_INTAKE: 'mL',
+  // Pulmonary
+  FORCED_EXPIRATORY_VOLUME: 'L',
+  // Cardiac diagnostics
+  ELECTRODERMAL_ACTIVITY: 'µS',
+  ATRIAL_FIBRILLATION_BURDEN: '%',
+  // Blood markers
   VITAMIN_D: 'ng/mL',
   IRON: 'mcg/dL',
   FERRITIN: 'ng/mL',
   B12: 'pg/mL',
   FOLATE: 'ng/mL',
+  // Inflammatory
   CRP: 'mg/L',
   ESR: 'mm/hr',
+  // Hormones
   TESTOSTERONE: 'ng/dL',
   CORTISOL: 'mcg/dL',
   TSH: 'mIU/L',
   T3: 'pg/mL',
   T4: 'mcg/dL',
+  // HRV alternative
+  HEART_RATE_VARIABILITY_RMSSD: 'ms',
+  // Diabetes management
+  INSULIN_DELIVERY: 'IU',
+  // Wellness
+  MINDFULNESS: 'min',
+  // Sleep
+  SLEEP_IN_BED: 'min',
+  // Nutrition - Macronutrients
+  DIETARY_ENERGY_CONSUMED: 'kcal',
+  DIETARY_CARBS_CONSUMED: 'g',
+  DIETARY_PROTEIN_CONSUMED: 'g',
+  DIETARY_FATS_CONSUMED: 'g',
+  DIETARY_FIBER: 'g',
+  DIETARY_SUGAR: 'g',
+  DIETARY_CAFFEINE: 'mg',
+  DIETARY_FAT_SATURATED: 'g',
+  DIETARY_FAT_MONOUNSATURATED: 'g',
+  DIETARY_FAT_POLYUNSATURATED: 'g',
+  DIETARY_CHOLESTEROL: 'mg',
+  // Nutrition - Vitamins
+  DIETARY_VITAMIN_A: 'mcg',
+  DIETARY_VITAMIN_C: 'mg',
+  DIETARY_VITAMIN_D: 'mcg',
+  DIETARY_VITAMIN_E: 'mg',
+  DIETARY_VITAMIN_K: 'mcg',
+  DIETARY_THIAMIN: 'mg',
+  DIETARY_RIBOFLAVIN: 'mg',
+  DIETARY_NIACIN: 'mg',
+  DIETARY_PANTOTHENIC_ACID: 'mg',
+  DIETARY_VITAMIN_B6: 'mg',
+  DIETARY_BIOTIN: 'mcg',
+  DIETARY_VITAMIN_B12: 'mcg',
+  DIETARY_FOLATE: 'mcg',
+  // Nutrition - Minerals
+  DIETARY_CALCIUM: 'mg',
+  DIETARY_IRON: 'mg',
+  DIETARY_MAGNESIUM: 'mg',
+  DIETARY_PHOSPHORUS: 'mg',
+  DIETARY_POTASSIUM: 'mg',
+  DIETARY_SODIUM: 'mg',
+  DIETARY_ZINC: 'mg',
+  DIETARY_CHROMIUM: 'mcg',
+  DIETARY_COPPER: 'mg',
+  DIETARY_IODINE: 'mcg',
+  DIETARY_MANGANESE: 'mg',
+  DIETARY_MOLYBDENUM: 'mcg',
+  DIETARY_SELENIUM: 'mcg',
+  // Other
   CUSTOM: '',
 };
 

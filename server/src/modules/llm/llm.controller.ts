@@ -24,7 +24,9 @@ import {
 } from './dto/summary-response.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { LlmRateLimitGuard } from '../../common/guards/llm-rate-limit.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { LlmRateLimit } from '../../common/decorators/llm-rate-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
 
@@ -46,7 +48,7 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @ApiTags('LLM')
 @ApiBearerAuth('JWT-auth')
 @Controller('llm')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, LlmRateLimitGuard)
 export class LlmController {
   constructor(private readonly llmService: LlmService) {}
 
@@ -64,8 +66,11 @@ export class LlmController {
    * POST /llm/summary/user-123
    * Body: { "summaryType": "WEEKLY_SUMMARY" }
    */
+  // Rate limit: 5 requests per hour per user
+  // Expensive LLM call — protects API costs and prevents abuse
   @Post('summary/:userId')
   @Roles(UserRole.CLINICIAN)
+  @LlmRateLimit(5, 3600)
   @ApiOperation({
     summary: 'Generate a health summary for a user',
     description:
@@ -98,6 +103,10 @@ export class LlmController {
     status: 404,
     description: 'User not found',
   })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded (5/hour per user)',
+  })
   async createSummary(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: CreateSummaryDto,
@@ -120,8 +129,11 @@ export class LlmController {
    * @example
    * GET /llm/nudge/user-123
    */
+  // Rate limit: 10 requests per hour per user
+  // Lighter LLM call but still involves API costs
   @Get('nudge/:userId')
   @Roles(UserRole.PATIENT)
+  @LlmRateLimit(10, 3600)
   @ApiOperation({
     summary: 'Get a wellness nudge for a patient',
     description:
@@ -154,6 +166,10 @@ export class LlmController {
   @ApiResponse({
     status: 404,
     description: 'User not found',
+  })
+  @ApiResponse({
+    status: 429,
+    description: 'Too many requests - rate limit exceeded (10/hour per user)',
   })
   async getNudge(
     @Param('userId', ParseUUIDPipe) userId: string,

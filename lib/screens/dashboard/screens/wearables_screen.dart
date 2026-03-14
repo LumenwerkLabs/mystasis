@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/providers/biomarkers_provider.dart';
 
 class WearablesScreen extends StatelessWidget {
   const WearablesScreen({super.key});
@@ -97,7 +99,7 @@ class _ConnectedDevicesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final devices = [
       _Device('Oura Ring Gen 3', 'oura', true, '98%', 'Synced 5 min ago'),
-      _Device('Apple Watch Ultra 2', 'apple', true, '72%', 'Synced 12 min ago'),
+      _Device('Apple Health', 'apple', true, '-', 'Tap to sync'),
       _Device('Whoop 4.0', 'whoop', false, '-', 'Last synced 2 days ago'),
     ];
 
@@ -108,7 +110,12 @@ class _ConnectedDevicesSection extends StatelessWidget {
             .map(
               (d) => Padding(
                 padding: const EdgeInsets.only(right: 16),
-                child: _DeviceCard(device: d),
+                child: GestureDetector(
+                  onTap: d.brand == 'apple'
+                      ? () => Navigator.pushNamed(context, '/health-sync')
+                      : null,
+                  child: _DeviceCard(device: d),
+                ),
               ),
             )
             .toList(),
@@ -256,167 +263,95 @@ class _HeartRateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.favorite, color: Colors.red[400], size: 24),
-              const SizedBox(width: 8),
-              Text(
-                'Heart Rate',
-                style: Theme.of(context).textTheme.headlineSmall,
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final latest = provider.latestByType;
+        final hr = latest.where((b) => b.type == 'HEART_RATE').firstOrNull;
+        final restingHr = latest.where((b) => b.type == 'RESTING_HEART_RATE').firstOrNull;
+        final walkingHr = latest.where((b) => b.type == 'WALKING_HEART_RATE').firstOrNull;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              const Spacer(),
-              Text('Today', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '68',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 48,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'bpm current',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: MystasisTheme.neutralGrey,
+              Row(
+                children: [
+                  Icon(Icons.favorite, color: Colors.red[400], size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Heart Rate',
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                ),
+                  const Spacer(),
+                  if (hr != null)
+                    Text(
+                      _formatRelativeTime(hr.timestamp),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    hr != null ? hr.value.toStringAsFixed(0) : '--',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 48,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'bpm',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: MystasisTheme.neutralGrey,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _HRStat(
+                    label: 'Resting',
+                    value: restingHr != null ? restingHr.value.toStringAsFixed(0) : '--',
+                    color: MystasisTheme.softAlgae,
+                  ),
+                  _HRStat(
+                    label: 'Latest',
+                    value: hr != null ? hr.value.toStringAsFixed(0) : '--',
+                    color: MystasisTheme.cellularBlue,
+                  ),
+                  _HRStat(
+                    label: 'Walking',
+                    value: walkingHr != null ? walkingHr.value.toStringAsFixed(0) : '--',
+                    color: MystasisTheme.signalAmber,
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const _HRZonesChart(),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _HRStat(
-                label: 'Resting',
-                value: '52',
-                color: MystasisTheme.softAlgae,
-              ),
-              _HRStat(
-                label: 'Average',
-                value: '68',
-                color: MystasisTheme.cellularBlue,
-              ),
-              _HRStat(
-                label: 'Max',
-                value: '142',
-                color: MystasisTheme.signalAmber,
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
-}
-
-class _HRZonesChart extends StatelessWidget {
-  const _HRZonesChart();
-
-  @override
-  Widget build(BuildContext context) {
-    // Mock HR data for 24 hours
-    final hours = List.generate(24, (i) => i);
-    final hrData = [
-      52,
-      51,
-      50,
-      49,
-      52,
-      58,
-      72,
-      85,
-      78,
-      72,
-      68,
-      95,
-      88,
-      75,
-      70,
-      68,
-      65,
-      82,
-      78,
-      72,
-      68,
-      62,
-      58,
-      54,
-    ];
-
-    return SizedBox(
-      height: 80,
-      child: CustomPaint(
-        size: const Size(double.infinity, 80),
-        painter: _HRChartPainter(hours: hours, values: hrData),
-      ),
-    );
-  }
-}
-
-class _HRChartPainter extends CustomPainter {
-  final List<int> hours;
-  final List<int> values;
-
-  _HRChartPainter({required this.hours, required this.values});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final barWidth = size.width / values.length - 2;
-
-    for (var i = 0; i < values.length; i++) {
-      final hr = values[i];
-      final color = hr < 60
-          ? MystasisTheme.softAlgae
-          : hr < 100
-          ? MystasisTheme.cellularBlue
-          : MystasisTheme.signalAmber;
-
-      final barHeight = (hr / 150) * size.height;
-      final x = i * (size.width / values.length);
-
-      final paint = Paint()
-        ..color = color.withValues(alpha: 0.7)
-        ..style = PaintingStyle.fill;
-
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(x, size.height - barHeight, barWidth, barHeight),
-          const Radius.circular(2),
-        ),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _HRStat extends StatelessWidget {
@@ -452,123 +387,110 @@ class _SleepCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.bedtime, color: Colors.indigo[300], size: 24),
-              const SizedBox(width: 8),
-              Text('Sleep', style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              Text('Last night', style: Theme.of(context).textTheme.bodySmall),
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final latest = provider.latestByType;
+        final duration = latest.where((b) => b.type == 'SLEEP_DURATION').firstOrNull;
+        final deep = latest.where((b) => b.type == 'SLEEP_DEEP').firstOrNull;
+        final rem = latest.where((b) => b.type == 'SLEEP_REM').firstOrNull;
+        final light = latest.where((b) => b.type == 'SLEEP_LIGHT').firstOrNull;
+        final awake = latest.where((b) => b.type == 'SLEEP_AWAKE').firstOrNull;
+
+        final hasStages = deep != null || rem != null || light != null || awake != null;
+        final totalMin = (deep?.value ?? 0) + (rem?.value ?? 0) + (light?.value ?? 0) + (awake?.value ?? 0);
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '7h 42m',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Icon(Icons.bedtime, color: Colors.indigo[300], size: 24),
+                  const SizedBox(width: 8),
+                  Text('Sleep', style: Theme.of(context).textTheme.headlineSmall),
+                  const Spacer(),
+                  if (duration != null)
+                    Text(
+                      _formatRelativeTime(duration.timestamp),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: MystasisTheme.softAlgae.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Score: 82',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: MystasisTheme.softAlgae,
-                    fontWeight: FontWeight.w500,
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    duration != null ? _formatHours(duration.value) : '--',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              if (hasStages && totalMin > 0) ...[
+                const SizedBox(height: 24),
+                // Sleep stages bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: SizedBox(
+                    height: 24,
+                    child: Row(
+                      children: [
+                        if (deep != null && deep.value > 0)
+                          Expanded(flex: deep.value.round(), child: Container(color: Colors.indigo[700])),
+                        if (rem != null && rem.value > 0)
+                          Expanded(flex: rem.value.round(), child: Container(color: Colors.indigo[400])),
+                        if (light != null && light.value > 0)
+                          Expanded(flex: light.value.round(), child: Container(color: Colors.indigo[200])),
+                        if (awake != null && awake.value > 0)
+                          Expanded(
+                            flex: awake.value.round(),
+                            child: Container(color: MystasisTheme.neutralGrey.withValues(alpha: 0.5)),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    if (deep != null)
+                      _SleepStat(label: 'Deep', value: _formatMinutes(deep.value), percentage: (deep.value / totalMin * 100).round(), color: Colors.indigo[700]!),
+                    if (rem != null)
+                      _SleepStat(label: 'REM', value: _formatMinutes(rem.value), percentage: (rem.value / totalMin * 100).round(), color: Colors.indigo[400]!),
+                    if (light != null)
+                      _SleepStat(label: 'Light', value: _formatMinutes(light.value), percentage: (light.value / totalMin * 100).round(), color: Colors.indigo[200]!),
+                    if (awake != null)
+                      _SleepStat(label: 'Awake', value: _formatMinutes(awake.value), percentage: (awake.value / totalMin * 100).round(), color: MystasisTheme.neutralGrey),
+                  ],
+                ),
+              ] else if (duration == null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'No sleep data available.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 24),
-          // Sleep stages
-          const _SleepStagesBar(),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _SleepStat(
-                label: 'Deep',
-                value: '1h 24m',
-                percentage: 18,
-                color: Colors.indigo[700]!,
-              ),
-              _SleepStat(
-                label: 'REM',
-                value: '1h 48m',
-                percentage: 23,
-                color: Colors.indigo[400]!,
-              ),
-              _SleepStat(
-                label: 'Light',
-                value: '4h 12m',
-                percentage: 55,
-                color: Colors.indigo[200]!,
-              ),
-              _SleepStat(
-                label: 'Awake',
-                value: '18m',
-                percentage: 4,
-                color: MystasisTheme.neutralGrey,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SleepStagesBar extends StatelessWidget {
-  const _SleepStagesBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: SizedBox(
-        height: 24,
-        child: Row(
-          children: [
-            Expanded(flex: 18, child: Container(color: Colors.indigo[700])),
-            Expanded(flex: 23, child: Container(color: Colors.indigo[400])),
-            Expanded(flex: 55, child: Container(color: Colors.indigo[200])),
-            Expanded(
-              flex: 4,
-              child: Container(
-                color: MystasisTheme.neutralGrey.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -618,83 +540,106 @@ class _ActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.directions_run,
-                color: MystasisTheme.signalAmber,
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Activity',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const Spacer(),
-              Text('Today', style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _ActivityRing(
-                label: 'Steps',
-                value: '8,432',
-                goal: '10,000',
-                progress: 0.84,
-                color: MystasisTheme.deepBioTeal,
-              ),
-              _ActivityRing(
-                label: 'Calories',
-                value: '2,180',
-                goal: '2,500',
-                progress: 0.87,
-                color: MystasisTheme.signalAmber,
-              ),
-              _ActivityRing(
-                label: 'Active Min',
-                value: '45',
-                goal: '60',
-                progress: 0.75,
-                color: MystasisTheme.softAlgae,
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final latest = provider.latestByType;
+        final steps = latest.where((b) => b.type == 'STEPS').firstOrNull;
+        final activeCal = latest.where((b) => b.type == 'ACTIVE_CALORIES').firstOrNull;
+        final exerciseTime = latest.where((b) => b.type == 'EXERCISE_TIME').firstOrNull;
+        final distance = latest.where((b) => b.type == 'DISTANCE_WALKING_RUNNING').firstOrNull;
+        final flights = latest.where((b) => b.type == 'FLIGHTS_CLIMBED').firstOrNull;
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          _ActivityMetric(
-            icon: Icons.straighten,
-            label: 'Distance',
-            value: '6.2 km',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.directions_run,
+                    color: MystasisTheme.signalAmber,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Activity',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const Spacer(),
+                  if (steps != null)
+                    Text(
+                      _formatRelativeTime(steps.timestamp),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _ActivityRing(
+                    label: 'Steps',
+                    value: steps != null ? _formatNumber(steps.value) : '--',
+                    color: MystasisTheme.deepBioTeal,
+                  ),
+                  _ActivityRing(
+                    label: 'Calories',
+                    value: activeCal != null ? _formatNumber(activeCal.value) : '--',
+                    color: MystasisTheme.signalAmber,
+                  ),
+                  _ActivityRing(
+                    label: 'Active Min',
+                    value: exerciseTime != null ? exerciseTime.value.toStringAsFixed(0) : '--',
+                    color: MystasisTheme.softAlgae,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              const Divider(),
+              const SizedBox(height: 16),
+              if (distance != null)
+                _ActivityMetric(
+                  icon: Icons.straighten,
+                  label: 'Distance',
+                  value: '${distance.value.toStringAsFixed(1)} ${distance.unit}',
+                ),
+              if (distance != null) const SizedBox(height: 12),
+              if (flights != null)
+                _ActivityMetric(
+                  icon: Icons.stairs,
+                  label: 'Floors',
+                  value: flights.value.toStringAsFixed(0),
+                ),
+              if (flights != null) const SizedBox(height: 12),
+              if (activeCal != null)
+                _ActivityMetric(
+                  icon: Icons.local_fire_department,
+                  label: 'Active calories',
+                  value: '${activeCal.value.toStringAsFixed(0)} ${activeCal.unit}',
+                ),
+              if (steps == null && activeCal == null && exerciseTime == null)
+                Text(
+                  'No activity data available.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 12),
-          _ActivityMetric(icon: Icons.stairs, label: 'Floors', value: '12'),
-          const SizedBox(height: 12),
-          _ActivityMetric(
-            icon: Icons.local_fire_department,
-            label: 'Active calories',
-            value: '420 kcal',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -702,15 +647,11 @@ class _ActivityCard extends StatelessWidget {
 class _ActivityRing extends StatelessWidget {
   final String label;
   final String value;
-  final String goal;
-  final double progress;
   final Color color;
 
   const _ActivityRing({
     required this.label,
     required this.value,
-    required this.goal,
-    required this.progress,
     required this.color,
   });
 
@@ -718,43 +659,24 @@ class _ActivityRing extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        SizedBox(
+        Container(
           width: 70,
           height: 70,
-          child: Stack(
-            children: [
-              CircularProgressIndicator(
-                value: 1,
-                strokeWidth: 6,
-                backgroundColor: color.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation(
-                  color.withValues(alpha: 0.15),
-                ),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color.withValues(alpha: 0.1),
+          ),
+          child: Center(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: color,
               ),
-              CircularProgressIndicator(
-                value: progress,
-                strokeWidth: 6,
-                backgroundColor: Colors.transparent,
-                valueColor: AlwaysStoppedAnimation(color),
-              ),
-              Center(
-                child: Text(
-                  '${(progress * 100).toInt()}%',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
@@ -796,127 +718,116 @@ class _HRVCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final weekData = [52, 48, 55, 61, 58, 63, 58];
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final hrv = provider.latestByType
+            .where((b) => b.type == 'HEART_RATE_VARIABILITY')
+            .firstOrNull;
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.monitor_heart,
-                color: MystasisTheme.cellularBlue,
-                size: 24,
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Heart Rate Variability',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const Spacer(),
-              Text('This week', style: Theme.of(context).textTheme.bodySmall),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '58',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 48,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'ms average',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: MystasisTheme.neutralGrey,
-                  ),
-                ),
-              ),
-              const Spacer(),
               Row(
                 children: [
-                  const Icon(
-                    Icons.trending_up,
-                    size: 18,
-                    color: MystasisTheme.softAlgae,
+                  Icon(
+                    Icons.monitor_heart,
+                    color: MystasisTheme.cellularBlue,
+                    size: 24,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   Text(
-                    '+12% vs last week',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: MystasisTheme.softAlgae,
+                    'Heart Rate Variability',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const Spacer(),
+                  if (hrv != null)
+                    Text(
+                      _formatRelativeTime(hrv.timestamp),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    hrv != null ? hrv.value.toStringAsFixed(0) : '--',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 48,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      hrv?.unit ?? 'ms',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: MystasisTheme.neutralGrey,
+                      ),
                     ),
                   ),
                 ],
               ),
+              if (hrv == null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'No HRV data available.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 24),
-          SizedBox(
-            height: 120,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(7, (i) {
-                final value = weekData[i];
-                final maxValue = 80;
-                final height = (value / maxValue) * 100;
-                final isToday = i == 6;
-
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      '$value',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isToday
-                            ? MystasisTheme.deepBioTeal
-                            : MystasisTheme.neutralGrey,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: 24,
-                      height: height,
-                      decoration: BoxDecoration(
-                        color: isToday
-                            ? MystasisTheme.deepBioTeal
-                            : MystasisTheme.cellularBlue.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      days[i],
-                      style: Theme.of(context).textTheme.labelSmall,
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+String _formatRelativeTime(DateTime timestamp) {
+  final diff = DateTime.now().difference(timestamp);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${timestamp.month}/${timestamp.day}/${timestamp.year}';
+}
+
+String _formatHours(double hours) {
+  final h = hours.floor();
+  final m = ((hours - h) * 60).round();
+  if (m == 0) return '${h}h';
+  return '${h}h ${m}m';
+}
+
+String _formatMinutes(double minutes) {
+  if (minutes >= 60) {
+    final h = (minutes / 60).floor();
+    final m = (minutes % 60).round();
+    return '${h}h ${m}m';
+  }
+  return '${minutes.round()}m';
+}
+
+String _formatNumber(double value) {
+  if (value >= 1000) {
+    return '${(value / 1000).toStringAsFixed(1)}k';
+  }
+  return value.toStringAsFixed(0);
 }

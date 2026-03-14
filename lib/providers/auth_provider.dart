@@ -57,13 +57,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _authService.signUp(
+      final user = await _authService.signUp(
         email: email,
         password: password,
         birthdate: birthdate,
         firstName: firstName,
         lastName: lastName,
       );
+      _user = user;
       _isLoading = false;
       notifyListeners();
       return true;
@@ -90,10 +91,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _authService.signIn(
+      final user = await _authService.signIn(
         email: email,
         password: password,
       );
+      _user = user;
       _isLoading = false;
       notifyListeners();
       return true;

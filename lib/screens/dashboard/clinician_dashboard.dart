@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/providers/patients_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
+import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
 import 'package:mystasis/screens/dashboard/widgets/clinician_sidebar.dart';
 import 'package:mystasis/screens/dashboard/widgets/clinician_navbar.dart';
@@ -27,6 +28,9 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
     super.initState();
     // Load patients on dashboard init, then load biomarkers for auto-selected patient
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthProvider>();
+      if (auth.user == null || !auth.user!.isClinician) return;
+
       final patientsProvider = context.read<PatientsProvider>();
       await patientsProvider.loadPatients();
       final selected = patientsProvider.selectedPatient;

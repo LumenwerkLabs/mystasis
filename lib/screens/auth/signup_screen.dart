@@ -54,7 +54,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
 
     if (success && mounted) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
+      // Navigate to AuthWrapper which will show the appropriate dashboard
+      Navigator.of(context).pushReplacementNamed('/');
     }
   }
 

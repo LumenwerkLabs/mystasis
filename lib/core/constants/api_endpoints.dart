@@ -11,7 +11,8 @@ class ApiEndpoints {
           !envUrl.contains('localhost') &&
           !envUrl.contains('127.0.0.1')) {
         throw StateError(
-            'API_BASE_URL must use HTTPS for non-localhost environments');
+          'API_BASE_URL must use HTTPS for non-localhost environments',
+        );
       }
       return envUrl;
     }
@@ -31,6 +32,7 @@ class ApiEndpoints {
 
   // Health data endpoints
   static const String biomarkers = '/health-data/biomarkers';
+  static const String syncMe = '/health-data/sync/me';
   static const String alerts = '/alerts';
 
   // Parameterized health data helpers

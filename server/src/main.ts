@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import cookieParser from 'cookie-parser';
@@ -20,7 +21,11 @@ import cookieParser from 'cookie-parser';
  * @throws {Error} When CORS_ORIGIN is not set in production environment
  */
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Custom body parser with increased limit for health data sync batches
+  app.use(json({ limit: '5mb' }));
+  app.use(urlencoded({ limit: '5mb', extended: true }));
 
   // Security: Helmet middleware for security headers
   // Configure CSP to allow Swagger UI resources
@@ -105,4 +110,7 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(process.env.PORT ?? 3000);
 }
-void bootstrap();
+bootstrap().catch((err) => {
+  console.error('Failed to bootstrap application:', err);
+  process.exit(1);
+});

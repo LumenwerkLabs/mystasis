@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/core/models/llm_summary_model.dart';
 import 'package:mystasis/core/widgets/medical_disclaimer.dart';
+import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -101,10 +102,19 @@ class _ReportsPageState extends State<ReportsScreen>
                   ),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: widget.patientId != null ? _showGenerateDialog : null,
-                icon: const Icon(Icons.auto_awesome, size: 20),
-                label: const Text('Generate Report'),
+              Consumer<AuthProvider>(
+                builder: (context, auth, _) {
+                  if (auth.user?.isClinician != true) {
+                    return const SizedBox.shrink();
+                  }
+                  return ElevatedButton.icon(
+                    onPressed: widget.patientId != null
+                        ? _showGenerateDialog
+                        : null,
+                    icon: const Icon(Icons.auto_awesome, size: 20),
+                    label: const Text('Generate Report'),
+                  );
+                },
               ),
             ],
           ),

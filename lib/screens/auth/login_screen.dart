@@ -27,14 +27,11 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.signIn(
+    await authProvider.signIn(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
-
-    if (success && mounted) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-    }
+    // Navigation handled reactively by AuthWrapper's Consumer
   }
 
   @override

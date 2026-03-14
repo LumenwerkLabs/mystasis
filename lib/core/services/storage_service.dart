@@ -112,6 +112,7 @@ SecureStorageWrapper createPlatformStorageWrapper() {
 class StorageService {
   static const String _tokenKey = 'auth_token';
   static const String _userIdKey = 'user_id';
+  static const String _lastHealthSyncKey = 'last_health_sync';
 
   final SecureStorageWrapper _secureStorage;
 
@@ -169,6 +170,29 @@ class StorageService {
   Future<String?> getUserId() async {
     try {
       return await _secureStorage.read(key: _userIdKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Save the last successful health sync timestamp
+  Future<void> saveLastHealthSync(DateTime timestamp) async {
+    try {
+      await _secureStorage.write(
+        key: _lastHealthSyncKey,
+        value: timestamp.toIso8601String(),
+      );
+    } catch (e) {
+      throw StorageException('Failed to save last health sync: $e');
+    }
+  }
+
+  /// Retrieve the last successful health sync timestamp
+  Future<DateTime?> getLastHealthSync() async {
+    try {
+      final value = await _secureStorage.read(key: _lastHealthSyncKey);
+      if (value == null || value.isEmpty) return null;
+      return DateTime.parse(value);
     } catch (e) {
       return null;
     }

@@ -131,6 +131,10 @@ describe('HealthDataController', () => {
     ) => Promise<PaginatedBiomarkersResponse>;
     createBiomarker: (dto: CreateBiomarkerDto) => Promise<BiomarkerResponse>;
     syncWearableData: (dto: WearableSyncDto) => Promise<{ count: number }>;
+    syncMyHealthData: (
+      dto: { biomarkers: WearableSyncDto['biomarkers'] },
+      user: UserPayload,
+    ) => Promise<{ count: number }>;
     getLatestBiomarker: (
       userId: string,
       type: BiomarkerType,
@@ -836,6 +840,118 @@ describe('HealthDataController', () => {
         await expect(controller.syncWearableData(syncDto)).rejects.toThrow(
           'Batch insert failed',
         );
+      });
+    });
+  });
+
+  // ============================================
+  // POST /health-data/sync/me TESTS
+  // ============================================
+
+  describe('syncMyHealthData (POST /health-data/sync/me)', () => {
+    const patientSyncDto = {
+      biomarkers: [
+        {
+          type: BiomarkerType.HEART_RATE,
+          value: 72,
+          unit: 'bpm',
+          timestamp: '2024-01-15T10:00:00Z',
+          source: 'apple_health',
+        },
+        {
+          type: BiomarkerType.STEPS,
+          value: 8500,
+          unit: 'count',
+          timestamp: '2024-01-15T10:00:00Z',
+          source: 'apple_health',
+        },
+      ],
+    };
+
+    describe('happy path', () => {
+      it('should use userId from JWT token, not from request body', async () => {
+        // Arrange
+        mockHealthDataService.createMany.mockResolvedValue({ count: 2 });
+
+        // Act
+        await controller.syncMyHealthData(patientSyncDto, mockPatient);
+
+        // Assert - userId should come from mockPatient.sub
+        expect(mockHealthDataService.createMany).toHaveBeenCalledWith(
+          expect.arrayContaining([
+            expect.objectContaining({ userId: mockPatient.sub }),
+          ]),
+        );
+      });
+
+      it('should return count of created records', async () => {
+        // Arrange
+        mockHealthDataService.createMany.mockResolvedValue({ count: 2 });
+
+        // Act
+        const result = await controller.syncMyHealthData(
+          patientSyncDto,
+          mockPatient,
+        );
+
+        // Assert
+        expect(result).toEqual({ count: 2 });
+      });
+
+      it('should map all biomarkers with the authenticated user ID', async () => {
+        // Arrange
+        mockHealthDataService.createMany.mockResolvedValue({ count: 2 });
+
+        // Act
+        await controller.syncMyHealthData(patientSyncDto, mockPatient);
+
+        // Assert
+        const callArg = mockHealthDataService.createMany.mock.calls[0][0];
+        expect(callArg).toHaveLength(2);
+        callArg.forEach(
+          (b: { userId: string }) =>
+            expect(b.userId).toBe(mockPatient.sub),
+        );
+      });
+    });
+
+    describe('guards and decorators', () => {
+      it('should allow PATIENT role', () => {
+        if (!HealthDataController) return;
+
+        const methodRoles = Reflect.getMetadata(
+          ROLES_KEY,
+          HealthDataController.prototype.syncMyHealthData,
+        );
+
+        expect(methodRoles).toBeDefined();
+        expect(methodRoles).toContain(UserRole.PATIENT);
+      });
+
+      it('should NOT allow CLINICIAN role (patient-only endpoint)', () => {
+        if (!HealthDataController) return;
+
+        const methodRoles = Reflect.getMetadata(
+          ROLES_KEY,
+          HealthDataController.prototype.syncMyHealthData,
+        );
+
+        expect(methodRoles).toBeDefined();
+        expect(methodRoles).not.toContain(UserRole.CLINICIAN);
+      });
+    });
+
+    describe('error handling', () => {
+      it('should propagate service errors', async () => {
+        // Arrange
+        mockHealthDataService.createMany.mockRejectedValue(
+          new Error('Batch insert failed'),
+        );
+
+        // Act & Assert
+        await expect(
+          controller.syncMyHealthData(patientSyncDto, mockPatient),
+        ).rejects.toThrow('Batch insert failed');
       });
     });
   });

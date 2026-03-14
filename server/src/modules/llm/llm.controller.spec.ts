@@ -3,8 +3,10 @@ import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SummaryType, UserRole } from '@prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
+import { LLM_RATE_LIMIT_KEY } from '../../common/decorators/llm-rate-limit.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
+import { LlmRateLimitGuard } from '../../common/guards/llm-rate-limit.guard';
 
 /**
  * TDD Tests for LlmController
@@ -136,6 +138,8 @@ describe('LlmController', () => {
         .overrideGuard(JwtAuthGuard)
         .useValue({ canActivate: () => true })
         .overrideGuard(RolesGuard)
+        .useValue({ canActivate: () => true })
+        .overrideGuard(LlmRateLimitGuard)
         .useValue({ canActivate: () => true })
         .compile();
 
@@ -485,6 +489,75 @@ describe('LlmController', () => {
       if (controller) {
         expect(typeof controller.getNudge).toBe('function');
       }
+    });
+  });
+
+  // ============================================
+  // RATE LIMITING DECORATORS
+  // ============================================
+
+  describe('rate limiting decorators', () => {
+    describe('createSummary endpoint throttling', () => {
+      it('should have @LlmRateLimit decorator with 5 requests per hour', () => {
+        if (!LlmController) return;
+
+        const metadata = Reflect.getMetadata(
+          LLM_RATE_LIMIT_KEY,
+          LlmController.prototype.createSummary,
+        );
+
+        expect(metadata).toBeDefined();
+        expect(metadata.limit).toBe(5);
+        expect(metadata.ttl).toBe(3600);
+      });
+    });
+
+    describe('getNudge endpoint throttling', () => {
+      it('should have @LlmRateLimit decorator with 10 requests per hour', () => {
+        if (!LlmController) return;
+
+        const metadata = Reflect.getMetadata(
+          LLM_RATE_LIMIT_KEY,
+          LlmController.prototype.getNudge,
+        );
+
+        expect(metadata).toBeDefined();
+        expect(metadata.limit).toBe(10);
+        expect(metadata.ttl).toBe(3600);
+      });
+    });
+
+    describe('relative limits', () => {
+      it('should have stricter limits on summary than nudge', () => {
+        if (!LlmController) return;
+
+        const summaryMetadata = Reflect.getMetadata(
+          LLM_RATE_LIMIT_KEY,
+          LlmController.prototype.createSummary,
+        );
+        const nudgeMetadata = Reflect.getMetadata(
+          LLM_RATE_LIMIT_KEY,
+          LlmController.prototype.getNudge,
+        );
+
+        expect(summaryMetadata).toBeDefined();
+        expect(nudgeMetadata).toBeDefined();
+        expect(summaryMetadata.limit).toBeLessThan(nudgeMetadata.limit);
+      });
+    });
+
+    describe('guard chain', () => {
+      it('should have LlmRateLimitGuard in the guards chain', () => {
+        if (!LlmController) return;
+
+        const guards = Reflect.getMetadata('__guards__', LlmController) || [];
+        const hasRateLimitGuard = guards.some(
+          (guard: { name?: string }) =>
+            guard === LlmRateLimitGuard || guard.name === 'LlmRateLimitGuard',
+        );
+
+        expect(hasRateLimitGuard).toBe(true);
+      });
     });
   });
 

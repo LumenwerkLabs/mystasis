@@ -48,6 +48,17 @@ class HealthDataService {
     }
   }
 
+  /// Sync biomarkers from a patient device (e.g., Apple Health)
+  Future<Map<String, dynamic>> syncBiomarkers(
+    List<Map<String, dynamic>> biomarkers,
+  ) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.syncMe,
+      body: {'biomarkers': biomarkers},
+    );
+    return response as Map<String, dynamic>;
+  }
+
   /// Fetch biomarker trend data for a type within a date range
   Future<List<BiomarkerModel>> getTrend(
     String userId,

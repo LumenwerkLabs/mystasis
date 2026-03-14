@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/models/biomarker_model.dart';
 import 'package:mystasis/core/models/llm_summary_model.dart';
 import 'package:mystasis/core/widgets/medical_disclaimer.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
+import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
 
 class OverviewScreen extends StatelessWidget {
@@ -24,11 +26,21 @@ class OverviewScreen extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineLarge,
           ),
           const SizedBox(height: 8),
-          Text(
-            'Last updated: Dec 28, 2025 at 9:45 AM',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: MystasisTheme.neutralGrey),
+          Consumer<BiomarkersProvider>(
+            builder: (context, bioProvider, _) {
+              final lastUpdated = bioProvider.biomarkers.isNotEmpty
+                  ? bioProvider.biomarkers
+                      .map((b) => b.timestamp)
+                      .reduce((a, b) => a.isAfter(b) ? a : b)
+                  : null;
+              return Text(
+                lastUpdated != null
+                    ? 'Last updated: ${_formatDateTime(lastUpdated)}'
+                    : 'No data available',
+                style: Theme.of(context)
+                    .textTheme.bodyMedium?.copyWith(color: MystasisTheme.neutralGrey),
+              );
+            },
           ),
           const SizedBox(height: 32),
 
@@ -91,43 +103,47 @@ class _QuickStatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 16,
-      runSpacing: 16,
-      children: [
-        _StatCard(
-          icon: Icons.favorite_outline,
-          label: 'Biological Age',
-          value: '34',
-          unit: 'years',
-          trend: -3,
-          trendLabel: 'vs chronological',
-        ),
-        _StatCard(
-          icon: Icons.science_outlined,
-          label: 'Biomarkers Tracked',
-          value: '47',
-          unit: 'markers',
-          trend: 5,
-          trendLabel: 'new this month',
-        ),
-        _StatCard(
-          icon: Icons.watch_outlined,
-          label: 'Avg HRV',
-          value: '58',
-          unit: 'ms',
-          trend: 12,
-          trendLabel: '% improvement',
-        ),
-        _StatCard(
-          icon: Icons.bedtime_outlined,
-          label: 'Sleep Score',
-          value: '82',
-          unit: '/100',
-          trend: 4,
-          trendLabel: 'points this week',
-        ),
-      ],
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final latest = provider.latestByType;
+        final trackedCount = latest.length;
+
+        // Find specific latest values
+        final hrv = latest.where((b) => b.type == 'HEART_RATE_VARIABILITY').firstOrNull;
+        final restingHr = latest.where((b) => b.type == 'RESTING_HEART_RATE').firstOrNull;
+        final sleepDuration = latest.where((b) => b.type == 'SLEEP_DURATION').firstOrNull;
+
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            _StatCard(
+              icon: Icons.science_outlined,
+              label: 'Biomarkers Tracked',
+              value: '$trackedCount',
+              unit: 'types',
+            ),
+            _StatCard(
+              icon: Icons.watch_outlined,
+              label: 'Avg HRV',
+              value: hrv != null ? hrv.value.toStringAsFixed(0) : '--',
+              unit: hrv?.unit ?? 'ms',
+            ),
+            _StatCard(
+              icon: Icons.favorite_outline,
+              label: 'Resting HR',
+              value: restingHr != null ? restingHr.value.toStringAsFixed(0) : '--',
+              unit: restingHr?.unit ?? 'bpm',
+            ),
+            _StatCard(
+              icon: Icons.bedtime_outlined,
+              label: 'Sleep Duration',
+              value: sleepDuration != null ? sleepDuration.value.toStringAsFixed(1) : '--',
+              unit: sleepDuration?.unit ?? 'hours',
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -137,22 +153,16 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final String unit;
-  final int trend;
-  final String trendLabel;
 
   const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
     required this.unit,
-    required this.trend,
-    required this.trendLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isPositive = trend >= 0;
-
     return Container(
       width: 200,
       padding: const EdgeInsets.all(20),
@@ -197,30 +207,6 @@ class _StatCard extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(unit, style: Theme.of(context).textTheme.bodySmall),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                isPositive ? Icons.trending_up : Icons.trending_down,
-                size: 16,
-                color: isPositive
-                    ? MystasisTheme.softAlgae
-                    : MystasisTheme.errorRed,
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  '${trend.abs()} $trendLabel',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: isPositive
-                        ? MystasisTheme.softAlgae
-                        : MystasisTheme.errorRed,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
               ),
             ],
           ),
@@ -647,7 +633,8 @@ class _AIInsightsCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (patientId != null)
+                if (patientId != null &&
+                    context.read<AuthProvider>().user?.isClinician == true)
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -787,37 +774,51 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activities = [
-      _Activity('Lab results uploaded', '2 hours ago'),
-      _Activity('Sleep data synced', '5 hours ago'),
-      _Activity('Weight logged: 68.2 kg', 'Yesterday'),
-      _Activity('Supplement log updated', '2 days ago'),
-    ];
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final recent = List<BiomarkerModel>.from(provider.biomarkers)
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        final display = recent.take(4).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Recent Activity',
-            style: Theme.of(context).textTheme.headlineSmall,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Recent Activity',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 16),
+              if (display.isEmpty)
+                Text(
+                  'No recent activity.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+                )
+              else
+                ...display.map((b) => _ActivityRow(
+                      activity: _Activity(
+                        '${b.displayName}: ${b.value.toStringAsFixed(b.value % 1 == 0 ? 0 : 1)} ${b.unit}',
+                        _formatRelativeTime(b.timestamp),
+                      ),
+                    )),
+            ],
           ),
-          const SizedBox(height: 16),
-          ...activities.map((a) => _ActivityRow(activity: a)),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -860,4 +861,24 @@ class _ActivityRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDateTime(DateTime dt) {
+  const months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+  final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
+  final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+  final min = dt.minute.toString().padLeft(2, '0');
+  return '${months[dt.month - 1]} ${dt.day}, ${dt.year} at $hour:$min $amPm';
+}
+
+String _formatRelativeTime(DateTime timestamp) {
+  final diff = DateTime.now().difference(timestamp);
+  if (diff.inMinutes < 1) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  if (diff.inHours < 24) return '${diff.inHours}h ago';
+  if (diff.inDays < 7) return '${diff.inDays}d ago';
+  return '${timestamp.month}/${timestamp.day}/${timestamp.year}';
 }
