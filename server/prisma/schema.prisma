@@ -2,12 +2,13 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // User model with role-based access
@@ -27,10 +28,41 @@ model User {
   biomarkerValues BiomarkerValue[]
   alerts          Alert[]
   summaries       LLMSummary[]
+  refreshTokens   RefreshToken[]
 
   @@index([email])
   @@index([role])
   @@index([clinicId])
+}
+
+// Refresh tokens for session management (token rotation)
+model RefreshToken {
+  id         String    @id @default(uuid())
+  token      String    @unique
+  userId     String
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  replacedBy String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Blacklisted access tokens (revoked before natural expiry)
+model BlacklistedToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  userId    String
+  expiresAt DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([jti])
+  @@index([expiresAt])
 }
 
 // Biomarker timeseries data

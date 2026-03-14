@@ -10,15 +10,16 @@ WORKDIR /app
 # Install dependencies needed for native modules
 RUN apk add --no-cache libc6-compat openssl
 
-# Copy package files
+# Copy package files and prisma config
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY prisma.config.ts ./
 
 # Install all dependencies (including devDependencies for build)
 RUN npm ci
 
-# Generate Prisma client
-RUN npx prisma generate
+# Generate Prisma client (dummy URL — generate doesn't connect to DB)
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
 # Stage 2: Builder
 FROM node:20-alpine AS builder
@@ -27,6 +28,9 @@ WORKDIR /app
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/prisma ./prisma
+
+# Copy generated Prisma client (output is now in src/generated/prisma/)
+COPY --from=deps /app/src/generated ./src/generated
 
 # Copy source code
 COPY . .
@@ -55,12 +59,11 @@ COPY package*.json ./
 # Install production dependencies only
 RUN npm ci --only=production && npm cache clean --force
 
-# Copy Prisma schema and generated client
-COPY --from=deps /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
+# Copy Prisma schema and config (needed for migrations)
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 
-# Copy built application
+# Copy built application (includes compiled generated client in dist/)
 COPY --from=builder /app/dist ./dist
 
 # Change ownership to non-root user

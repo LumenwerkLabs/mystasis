@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { BiomarkerType, Prisma } from '@prisma/client';
-import { InputJsonValue } from '@prisma/client/runtime/library';
+import { BiomarkerType, Prisma } from '../../generated/prisma/client';
 
 /**
  * Service for managing biomarker health data in the Mystasis platform.
@@ -75,7 +74,7 @@ export class HealthDataService {
     unit: string;
     timestamp: Date;
     source?: string;
-    metadata?: InputJsonValue;
+    metadata?: Prisma.InputJsonValue;
   }) {
     // Validate user exists
     const user = await this.prisma.user.findUnique({

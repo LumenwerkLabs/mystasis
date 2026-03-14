@@ -18,7 +18,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { BiomarkerType, UserRole } from '@prisma/client';
+import { BiomarkerType, UserRole } from '../../generated/prisma/client';
 import { HealthDataService } from './health-data.service';
 import { CreateBiomarkerDto } from './dto/create-biomarker.dto';
 import { WearableSyncDto } from './dto/wearable-sync.dto';

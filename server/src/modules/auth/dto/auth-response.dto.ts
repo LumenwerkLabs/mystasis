@@ -1,4 +1,4 @@
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../../../generated/prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -85,38 +85,20 @@ export class AuthUserDto {
  * }
  */
 export class AuthResponseDto {
-  /**
-   * JWT access token for authenticating subsequent requests.
-   * Include in Authorization header as: Bearer <accessToken>
-   */
   @ApiProperty({
     description:
-      'JWT access token for authenticating subsequent requests. Include in Authorization header as: Bearer <token>',
+      'Short-lived JWT access token (15m). Include in Authorization header as: Bearer <token>',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
   })
-  accessToken: string;
+  access_token: string;
 
-  /**
-   * Token type, always 'Bearer' for JWT tokens.
-   */
   @ApiProperty({
-    description: 'Token type (always Bearer for JWT)',
-    example: 'Bearer',
+    description:
+      'Long-lived refresh token (7d). Use with POST /auth/refresh to obtain a new token pair.',
+    example: 'a1b2c3d4e5f6...',
   })
-  tokenType: string;
+  refresh_token: string;
 
-  /**
-   * Token expiration time (e.g., '24h', '7d').
-   */
-  @ApiProperty({
-    description: 'Token expiration time',
-    example: '24h',
-  })
-  expiresIn: string;
-
-  /**
-   * Authenticated user information (without password).
-   */
   @ApiProperty({
     description: 'Authenticated user information (without password)',
     type: AuthUserDto,

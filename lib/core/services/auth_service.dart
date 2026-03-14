@@ -39,10 +39,12 @@ class AuthException implements Exception {
 /// - Browser automatically sends cookies with requests
 /// - Logout calls server endpoint to clear cookie
 ///
-/// ## Future Improvements
+/// ## Token Lifecycle
 ///
-/// - **Token Refresh**: Add refresh token mechanism for better UX
-/// - **Biometric Auth**: Add local_auth for biometric re-authentication on mobile
+/// - Access tokens are short-lived (15m) and refreshed transparently
+///   by [ApiClient]'s interceptor when they expire.
+/// - Refresh tokens are long-lived (7d) and rotated on each use.
+/// - On logout, both tokens are invalidated server-side.
 class AuthService {
   late final ApiClient _apiClient;
   final StorageService _storageService;
@@ -98,9 +100,11 @@ class AuthService {
       );
 
       final token = _extractToken(response);
+      final refreshToken = _extractRefreshToken(response);
       final userData = _extractUserData(response);
 
       await _storageService.saveToken(token);
+      await _storageService.saveRefreshToken(refreshToken);
 
       final user = UserModel.fromJson(userData);
       await _storageService.saveUserId(user.id);
@@ -160,9 +164,11 @@ class AuthService {
       );
 
       final token = _extractToken(response);
+      final refreshToken = _extractRefreshToken(response);
       final userData = _extractUserData(response);
 
       await _storageService.saveToken(token);
+      await _storageService.saveRefreshToken(refreshToken);
 
       final user = UserModel.fromJson(userData);
       await _storageService.saveUserId(user.id);
@@ -209,19 +215,30 @@ class AuthService {
 
   /// Sign out the current user.
   ///
-  /// Platform-specific behavior:
-  /// - **Mobile**: Clears local storage only
-  /// - **Web**: Calls logout endpoint to clear HttpOnly cookie, then clears local state
+  /// Calls the server logout endpoint to invalidate the session,
+  /// then clears local storage. Server call is best-effort — local
+  /// logout always proceeds even if the server request fails.
   Future<void> signOut() async {
-    // On web, call logout endpoint to clear the HttpOnly cookie
-    if (kIsWeb) {
-      try {
-        await _apiClient.post(ApiEndpoints.logout);
-      } catch (_) {
-        // Ignore errors - logout should always succeed locally
-        // even if the server request fails
-      }
+    try {
+      final refreshToken = await _storageService.getRefreshToken();
+      await _apiClient.post(
+        ApiEndpoints.logout,
+        body: refreshToken != null
+            ? {'refresh_token': refreshToken}
+            : null,
+        skipRefresh: true,
+      );
+    } catch (_) {
+      // Best effort — local logout still proceeds
     }
+    await _storageService.clearAll();
+    _currentUser = null;
+    _emitAuthState(null);
+  }
+
+  /// Force logout without server call — used by the API interceptor
+  /// when token refresh fails (session is irrecoverable).
+  Future<void> forceLogout() async {
     await _storageService.clearAll();
     _currentUser = null;
     _emitAuthState(null);
@@ -280,6 +297,24 @@ class AuthService {
       throw const AuthException(
         code: 'invalid-response',
         message: 'Missing or invalid access token in response.',
+      );
+    }
+    return token;
+  }
+
+  /// Extract refresh token from response
+  String _extractRefreshToken(dynamic response) {
+    if (response is! Map<String, dynamic>) {
+      throw const AuthException(
+        code: 'invalid-response',
+        message: 'Invalid response format from server.',
+      );
+    }
+    final token = response['refresh_token'];
+    if (token == null || token is! String || token.isEmpty) {
+      throw const AuthException(
+        code: 'invalid-response',
+        message: 'Missing or invalid refresh token in response.',
       );
     }
     return token;

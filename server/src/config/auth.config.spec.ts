@@ -63,30 +63,28 @@ describe('AuthConfig', () => {
       expect(config.jwtSecret).toBe(validSecret);
     });
 
-    it('should return configuration with default expiration when JWT_EXPIRATION not set', () => {
+    it('should return configuration with default access token expiration when not set', () => {
       // Arrange
       process.env.JWT_SECRET = 'this-is-a-very-secure-secret-key-32chars';
-      delete process.env.JWT_EXPIRATION;
+      delete process.env.JWT_ACCESS_EXPIRATION;
 
       // Act
       const config = authConfig();
 
       // Assert
-      expect(config.jwtExpiration).toBeDefined();
-      // Default should be something reasonable like '1h' or '24h'
-      expect(typeof config.jwtExpiration).toBe('string');
+      expect(config.accessTokenExpiration).toBe('15m');
     });
 
-    it('should use custom JWT_EXPIRATION when provided', () => {
+    it('should return default refresh token expiration of 7 days', () => {
       // Arrange
       process.env.JWT_SECRET = 'this-is-a-very-secure-secret-key-32chars';
-      process.env.JWT_EXPIRATION = '7d';
+      delete process.env.JWT_REFRESH_EXPIRATION_DAYS;
 
       // Act
       const config = authConfig();
 
       // Assert
-      expect(config.jwtExpiration).toBe('7d');
+      expect(config.refreshTokenExpirationDays).toBe(7);
     });
   });
 
@@ -164,65 +162,33 @@ describe('AuthConfig', () => {
     });
   });
 
-  describe('JWT_EXPIRATION validation', () => {
+  describe('token expiration configuration', () => {
     beforeEach(() => {
-      // Set valid secret for expiration tests
       process.env.JWT_SECRET = 'this-is-a-very-secure-secret-key-32chars';
     });
 
-    it('should accept valid time format "1h"', () => {
-      // Arrange
-      process.env.JWT_EXPIRATION = '1h';
-
-      // Act
+    it('should use custom access token expiration when provided', () => {
+      process.env.JWT_ACCESS_EXPIRATION = '30m';
       const config = authConfig();
-
-      // Assert
-      expect(config.jwtExpiration).toBe('1h');
+      expect(config.accessTokenExpiration).toBe('30m');
     });
 
-    it('should accept valid time format "24h"', () => {
-      // Arrange
-      process.env.JWT_EXPIRATION = '24h';
-
-      // Act
+    it('should use custom refresh token expiration days when provided', () => {
+      process.env.JWT_REFRESH_EXPIRATION_DAYS = '14';
       const config = authConfig();
-
-      // Assert
-      expect(config.jwtExpiration).toBe('24h');
+      expect(config.refreshTokenExpirationDays).toBe(14);
     });
 
-    it('should accept valid time format "7d"', () => {
-      // Arrange
-      process.env.JWT_EXPIRATION = '7d';
-
-      // Act
+    it('should default refresh token expiration to 7 days', () => {
+      delete process.env.JWT_REFRESH_EXPIRATION_DAYS;
       const config = authConfig();
-
-      // Assert
-      expect(config.jwtExpiration).toBe('7d');
+      expect(config.refreshTokenExpirationDays).toBe(7);
     });
 
-    it('should accept valid time format "30m"', () => {
-      // Arrange
-      process.env.JWT_EXPIRATION = '30m';
-
-      // Act
+    it('should default access token expiration to 15m', () => {
+      delete process.env.JWT_ACCESS_EXPIRATION;
       const config = authConfig();
-
-      // Assert
-      expect(config.jwtExpiration).toBe('30m');
-    });
-
-    it('should accept numeric seconds as string', () => {
-      // Arrange
-      process.env.JWT_EXPIRATION = '3600'; // 1 hour in seconds
-
-      // Act
-      const config = authConfig();
-
-      // Assert
-      expect(config.jwtExpiration).toBe('3600');
+      expect(config.accessTokenExpiration).toBe('15m');
     });
   });
 
@@ -232,28 +198,17 @@ describe('AuthConfig', () => {
     });
 
     it('should return configuration with expected properties', () => {
-      // Act
       const config = authConfig();
-
-      // Assert
       expect(config).toHaveProperty('jwtSecret');
-      expect(config).toHaveProperty('jwtExpiration');
+      expect(config).toHaveProperty('accessTokenExpiration');
+      expect(config).toHaveProperty('refreshTokenExpirationDays');
     });
 
-    it('should have string type for jwtSecret', () => {
-      // Act
+    it('should have correct types for all properties', () => {
       const config = authConfig();
-
-      // Assert
       expect(typeof config.jwtSecret).toBe('string');
-    });
-
-    it('should have string type for jwtExpiration', () => {
-      // Act
-      const config = authConfig();
-
-      // Assert
-      expect(typeof config.jwtExpiration).toBe('string');
+      expect(typeof config.accessTokenExpiration).toBe('string');
+      expect(typeof config.refreshTokenExpirationDays).toBe('number');
     });
   });
 

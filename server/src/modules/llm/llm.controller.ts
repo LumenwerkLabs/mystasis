@@ -15,7 +15,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../../generated/prisma/client';
 import { LlmService } from './llm.service';
 import { CreateSummaryDto } from './dto/create-summary.dto';
 import {

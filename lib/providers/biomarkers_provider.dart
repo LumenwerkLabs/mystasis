@@ -37,10 +37,6 @@ class BiomarkersProvider extends ChangeNotifier {
       _loadedForUserId = userId;
       _isLoading = false;
       notifyListeners();
-    } on UnauthorizedException {
-      _errorMessage = 'Session expired. Please log in again.';
-      _isLoading = false;
-      notifyListeners();
     } on NetworkException {
       _errorMessage = 'Unable to connect. Please check your network.';
       _isLoading = false;

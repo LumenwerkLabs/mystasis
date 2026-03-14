@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { Prisma, UserRole, User } from '@prisma/client';
+import { Prisma, UserRole, User } from '../../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 
 /**

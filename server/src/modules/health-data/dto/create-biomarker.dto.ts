@@ -1,6 +1,6 @@
 import { IsOptional, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { InputJsonValue } from '@prisma/client/runtime/library';
+import { Prisma } from '../../../generated/prisma/client';
 import { BaseBiomarkerDto } from './base-biomarker.dto';
 
 /**
@@ -23,5 +23,5 @@ export class CreateBiomarkerDto extends BaseBiomarkerDto {
     example: { device: 'Apple Watch Series 9', firmware: '10.2' },
   })
   @IsOptional()
-  metadata?: InputJsonValue;
+  metadata?: Prisma.InputJsonValue;
 }

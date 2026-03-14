@@ -9,7 +9,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BiomarkerType } from '@prisma/client';
+import { BiomarkerType } from '../../../generated/prisma/client';
 
 /**
  * DTO for a single data point in a trend.

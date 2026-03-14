@@ -5,7 +5,7 @@ import {
   AlertStatus,
   BiomarkerType,
   Alert,
-} from '@prisma/client';
+} from '../../generated/prisma/client';
 import { AlertsService } from './alerts.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 

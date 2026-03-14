@@ -495,5 +495,452 @@ void main() {
             )).called(1);
       });
     });
+
+    group('tryRefreshToken', () {
+      test('should refresh token when stored refresh token exists and server returns 200', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 200,
+              body: {
+                'access_token': 'new_access_token',
+                'refresh_token': 'new_refresh_token',
+              },
+            ));
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isTrue);
+        verify(() => mockStorageService.saveToken('new_access_token')).called(1);
+        verify(() => mockStorageService.saveRefreshToken('new_refresh_token')).called(1);
+      });
+
+      test('should return false and call onSessionExpired when no refresh token stored', () async {
+        // Arrange
+        var sessionExpiredCalled = false;
+        apiClient.setSessionExpiredCallback(() {
+          sessionExpiredCalled = true;
+        });
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => null);
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isFalse);
+        expect(sessionExpiredCalled, isTrue);
+      });
+
+      test('should return false and call onSessionExpired when refresh token is empty', () async {
+        // Arrange
+        var sessionExpiredCalled = false;
+        apiClient.setSessionExpiredCallback(() {
+          sessionExpiredCalled = true;
+        });
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => '');
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isFalse);
+        expect(sessionExpiredCalled, isTrue);
+      });
+
+      test('should return false when server returns non-200 status', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Invalid refresh token'},
+            ));
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isFalse);
+      });
+
+      test('should return false when response missing access_token', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 200,
+              body: {
+                'refresh_token': 'new_refresh_token',
+              },
+            ));
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isFalse);
+      });
+
+      test('should return false when HTTP call throws', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenThrow(Exception('Network error'));
+
+        // Act
+        final result = await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(result, isFalse);
+      });
+
+      test('should call onSessionExpired only once across multiple failures', () async {
+        // Arrange
+        var sessionExpiredCount = 0;
+        apiClient.setSessionExpiredCallback(() {
+          sessionExpiredCount++;
+        });
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => null);
+
+        // Act
+        await apiClient.tryRefreshToken();
+        await apiClient.tryRefreshToken();
+        await apiClient.tryRefreshToken();
+
+        // Assert
+        expect(sessionExpiredCount, equals(1));
+      });
+    });
+
+    group('refresh queue (concurrent 401s)', () {
+      test('should queue concurrent refresh requests and resolve all when refresh succeeds', () async {
+        // Arrange
+        final completer = Completer<HttpResponse>();
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) => completer.future);
+
+        // Act - launch 3 concurrent refresh calls
+        final future1 = apiClient.tryRefreshToken();
+        final future2 = apiClient.tryRefreshToken();
+        final future3 = apiClient.tryRefreshToken();
+
+        // Complete the refresh with success
+        completer.complete(HttpResponse(
+          statusCode: 200,
+          body: {
+            'access_token': 'new_access',
+            'refresh_token': 'new_refresh',
+          },
+        ));
+
+        final results = await Future.wait([future1, future2, future3]);
+
+        // Assert
+        expect(results, equals([true, true, true]));
+        // HTTP post should be called only once
+        verify(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).called(1);
+      });
+
+      test('should reject all queued requests on failure', () async {
+        // Arrange
+        final completer = Completer<HttpResponse>();
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) => completer.future);
+
+        // Act - launch 3 concurrent refresh calls
+        final future1 = apiClient.tryRefreshToken();
+        final future2 = apiClient.tryRefreshToken();
+        final future3 = apiClient.tryRefreshToken();
+
+        // Complete the refresh with failure
+        completer.complete(HttpResponse(
+          statusCode: 401,
+          body: {'message': 'Invalid refresh token'},
+        ));
+
+        final results = await Future.wait([future1, future2, future3]);
+
+        // Assert
+        expect(results, equals([false, false, false]));
+      });
+    });
+
+    group('skipRefresh flag', () {
+      test('should bypass refresh on 401 with skipRefresh true', () async {
+        // Arrange
+        const endpoint = '/auth/logout';
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Unauthorized'},
+            ));
+
+        // Act & Assert
+        expect(
+          () => apiClient.post(endpoint, body: {}, skipRefresh: true),
+          throwsA(isA<UnauthorizedException>()),
+        );
+        // Verify no refresh attempt was made
+        verifyNever(() => mockStorageService.getRefreshToken());
+      });
+
+      test('should return normally on success with skipRefresh true', () async {
+        // Arrange
+        const endpoint = '/auth/logout';
+        final responseData = {'message': 'ok'};
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 200,
+              body: responseData,
+            ));
+
+        // Act
+        final result = await apiClient.post(endpoint, body: {}, skipRefresh: true);
+
+        // Assert
+        expect(result, equals(responseData));
+      });
+    });
+
+    group('_executeWithRefresh retry', () {
+      test('should retry GET after successful refresh on 401', () async {
+        // Arrange
+        var getCallCount = 0;
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+
+        // Mock GET: first call returns 401, second returns 200
+        when(() => mockHttpClient.get(
+              any(),
+              headers: any(named: 'headers'),
+            )).thenAnswer((_) async {
+          getCallCount++;
+          if (getCallCount == 1) {
+            return HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Token expired'},
+            );
+          }
+          return HttpResponse(
+            statusCode: 200,
+            body: {'data': 'success'},
+          );
+        });
+
+        // Mock refresh POST
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 200,
+              body: {
+                'access_token': 'new_access_token',
+                'refresh_token': 'new_refresh_token',
+              },
+            ));
+
+        // Act
+        final result = await apiClient.get('/api/data');
+
+        // Assert
+        expect(result, equals({'data': 'success'}));
+        expect(getCallCount, equals(2));
+      });
+
+      test('should retry POST after successful refresh on 401', () async {
+        // Arrange
+        var postCallCount = 0;
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+        when(() => mockStorageService.saveToken(any()))
+            .thenAnswer((_) async {});
+        when(() => mockStorageService.saveRefreshToken(any()))
+            .thenAnswer((_) async {});
+
+        // Mock POST: need to distinguish refresh from data POST by URL
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((invocation) async {
+          final url = invocation.positionalArguments[0] as Uri;
+          if (url.path.contains('/auth/refresh')) {
+            return HttpResponse(
+              statusCode: 200,
+              body: {
+                'access_token': 'new_access_token',
+                'refresh_token': 'new_refresh_token',
+              },
+            );
+          }
+          postCallCount++;
+          if (postCallCount == 1) {
+            return HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Token expired'},
+            );
+          }
+          return HttpResponse(
+            statusCode: 200,
+            body: {'created': true},
+          );
+        });
+
+        // Act
+        final result = await apiClient.post('/api/data', body: {'key': 'value'});
+
+        // Assert
+        expect(result, equals({'created': true}));
+        expect(postCallCount, equals(2));
+      });
+
+      test('should throw when refresh fails during retry', () async {
+        // Arrange
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'valid_refresh_token');
+
+        // Mock GET: returns 401
+        when(() => mockHttpClient.get(
+              any(),
+              headers: any(named: 'headers'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Token expired'},
+            ));
+
+        // Mock refresh POST: returns failure
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Invalid refresh token'},
+            ));
+
+        // Act & Assert
+        expect(
+          () => apiClient.get('/api/data'),
+          throwsA(isA<UnauthorizedException>()),
+        );
+      });
+    });
+
+    group('_noRefreshEndpoints', () {
+      test('should not attempt refresh on 401 from /auth/login', () async {
+        // Arrange
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => null);
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Invalid credentials'},
+            ));
+
+        // Act & Assert
+        expect(
+          () => apiClient.post('/auth/login', body: {
+            'email': 'test@example.com',
+            'password': 'wrong',
+          }),
+          throwsA(isA<UnauthorizedException>()),
+        );
+        // Verify no refresh token lookup was attempted
+        verifyNever(() => mockStorageService.getRefreshToken());
+      });
+
+      test('should not attempt refresh on 401 from /auth/register', () async {
+        // Arrange
+        when(() => mockStorageService.getToken())
+            .thenAnswer((_) async => null);
+        when(() => mockHttpClient.post(
+              any(),
+              headers: any(named: 'headers'),
+              body: any(named: 'body'),
+            )).thenAnswer((_) async => HttpResponse(
+              statusCode: 401,
+              body: {'message': 'Unauthorized'},
+            ));
+
+        // Act & Assert
+        expect(
+          () => apiClient.post('/auth/register', body: {
+            'email': 'test@example.com',
+            'password': 'pass123',
+          }),
+          throwsA(isA<UnauthorizedException>()),
+        );
+        // Verify no refresh token lookup was attempted
+        verifyNever(() => mockStorageService.getRefreshToken());
+      });
+    });
   });
 }

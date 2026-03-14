@@ -1,5 +1,5 @@
 import { ExecutionContext } from '@nestjs/common';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../../generated/prisma/client';
 
 /**
  * TDD Tests for CurrentUser Decorator

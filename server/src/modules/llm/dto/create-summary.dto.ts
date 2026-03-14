@@ -1,6 +1,6 @@
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { SummaryType } from '@prisma/client';
+import { SummaryType } from '../../../generated/prisma/client';
 
 /**
  * Data transfer object for creating a health summary.

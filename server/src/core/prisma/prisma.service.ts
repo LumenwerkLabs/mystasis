@@ -5,7 +5,8 @@ import {
   INestApplication,
   Logger,
 } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../../generated/prisma/client';
 
 /**
  * PrismaService extends PrismaClient to integrate with NestJS lifecycle.
@@ -17,6 +18,19 @@ export class PrismaService
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
+
+  constructor() {
+    const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    const adapter = new PrismaPg({
+      connectionString,
+      min: parseInt(process.env.DATABASE_POOL_MIN || '1', 10),
+      max: parseInt(process.env.DATABASE_POOL_MAX || '10', 10),
+    });
+    super({ adapter });
+  }
 
   /**
    * Connect to the database when the module initializes.

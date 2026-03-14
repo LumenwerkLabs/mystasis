@@ -130,7 +130,9 @@ void main() {
         verify(() => mockService.getBiomarkers('u2', limit: 100)).called(1);
       });
 
-      test('should set error message on UnauthorizedException', () async {
+      test('should set error message on UnauthorizedException (falls to generic handler)', () async {
+        // UnauthorizedException is now handled by ApiClient interceptor.
+        // If it reaches the provider, the generic catch handles it.
         when(() => mockService.getBiomarkers(any(), limit: any(named: 'limit')))
             .thenThrow(
                 const UnauthorizedException('Session expired'));
@@ -138,7 +140,7 @@ void main() {
         await provider.loadBiomarkers('u1');
 
         expect(provider.errorMessage,
-            equals('Session expired. Please log in again.'));
+            equals('Failed to load biomarkers.'));
         expect(provider.isLoading, isFalse);
         expect(provider.biomarkers, isEmpty);
       });

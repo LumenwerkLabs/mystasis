@@ -1,12 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import {
   ConflictException,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { UserRole, User } from '@prisma/client';
+import { UserRole, User } from '../../generated/prisma/client';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
+import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
 import * as bcrypt from 'bcrypt';
 
 // Mock bcrypt module
@@ -55,6 +58,7 @@ type UserWithoutPassword = Omit<User, 'password'>;
 // AuthService response interfaces
 interface AuthResponse {
   access_token: string;
+  refresh_token: string;
   user: UserWithoutPassword;
 }
 
@@ -137,11 +141,42 @@ describe('AuthService', () => {
       const authServiceModule = await import('./auth.service');
       AuthService = authServiceModule.AuthService;
 
+      const mockConfigService = {
+        get: jest.fn((key: string) => {
+          if (key === 'auth.refreshTokenExpirationDays') return 7;
+          return undefined;
+        }),
+      };
+
+      const mockPrismaService = {
+        refreshToken: {
+          create: jest.fn().mockResolvedValue({ id: 'rt-1', token: 'mock-refresh-token' }),
+          findUnique: jest.fn(),
+          update: jest.fn(),
+          updateMany: jest.fn(),
+          deleteMany: jest.fn(),
+        },
+        blacklistedToken: {
+          create: jest.fn(),
+          findUnique: jest.fn(),
+          deleteMany: jest.fn(),
+        },
+      };
+
+      const mockTokenBlacklistService = {
+        isBlacklisted: jest.fn().mockResolvedValue(false),
+        blacklist: jest.fn().mockResolvedValue(undefined),
+        cleanupExpired: jest.fn().mockResolvedValue(0),
+      };
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           AuthService,
           { provide: UsersService, useValue: mockUsersService },
           { provide: JwtService, useValue: mockJwtService },
+          { provide: ConfigService, useValue: mockConfigService },
+          { provide: PrismaService, useValue: mockPrismaService },
+          { provide: TokenBlacklistService, useValue: mockTokenBlacklistService },
         ],
       }).compile();
 

@@ -135,10 +135,6 @@ class HealthSyncProvider extends ChangeNotifier {
       await _storageService.saveLastHealthSync(_lastSyncTimestamp!);
       _status = SyncStatus.done;
       notifyListeners();
-    } on UnauthorizedException {
-      _status = SyncStatus.error;
-      _errorMessage = 'Session expired. Please log in again.';
-      notifyListeners();
     } on NetworkException catch (_) {
       _status = SyncStatus.error;
       _errorMessage = 'Unable to connect. Please check your network.';

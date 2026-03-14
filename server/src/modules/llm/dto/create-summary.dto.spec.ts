@@ -1,6 +1,6 @@
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { SummaryType } from '@prisma/client';
+import { SummaryType } from '../../../generated/prisma/client';
 
 /**
  * TDD Tests for CreateSummaryDto

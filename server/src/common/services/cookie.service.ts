@@ -3,74 +3,99 @@ import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
 
 /**
- * Cookie name for storing JWT token.
- * Used by web clients with HttpOnly cookies for XSS protection.
+ * Cookie name for storing JWT access token.
  */
 export const AUTH_COOKIE_NAME = process.env.COOKIE_NAME || 'access_token';
 
 /**
+ * Cookie name for storing refresh token.
+ */
+export const REFRESH_COOKIE_NAME = 'refresh_token';
+
+/**
  * Service for managing authentication cookies.
- *
- * @description Provides secure cookie operations for JWT tokens.
- * Centralizes cookie configuration to ensure consistent security
- * settings across all modules.
  *
  * Security features:
  * - HttpOnly: Prevents JavaScript access (XSS protection)
  * - Secure: HTTPS only in production
- * - SameSite: Strict CSRF protection
- *
- * @example
- * // In a controller
- * @Post('login')
- * async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
- *   const result = await this.authService.login(dto);
- *   this.cookieService.setAuthCookie(res, result.accessToken);
- *   return result;
- * }
+ * - SameSite: Lax for cross-origin redirect support
+ * - Access token cookie: short-lived (15m), available on all paths
+ * - Refresh token cookie: long-lived (7d), scoped to /auth/refresh
  */
 @Injectable()
 export class CookieService {
   constructor(private readonly configService: ConfigService) {}
 
   /**
-   * Sets HttpOnly cookie with JWT token for web clients.
-   *
-   * @description Configures cookie with security settings appropriate
-   * for the current environment (development vs production).
-   *
-   * @param res - Express Response object
-   * @param token - JWT access token to store in cookie
+   * Sets HttpOnly cookie with JWT access token.
+   * Short-lived (matches access token expiration).
    */
   setAuthCookie(res: Response, token: string): void {
     const isProduction = this.configService.get('NODE_ENV') === 'production';
-    const maxAge =
-      this.configService.get<number>('auth.cookieMaxAge') ||
-      7 * 24 * 60 * 60 * 1000; // 7 days default
 
     res.cookie(AUTH_COOKIE_NAME, token, {
-      httpOnly: true, // Prevents JavaScript access (XSS protection)
-      secure: isProduction, // HTTPS only in production
-      sameSite: 'strict', // CSRF protection
-      maxAge,
-      path: '/', // Cookie available for all paths
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes — matches access token expiration
+      path: '/',
     });
   }
 
   /**
-   * Clears the authentication cookie.
-   *
-   * @description Used for logout operations. Must use the same
-   * cookie options as setAuthCookie for the clear to work properly.
-   *
-   * @param res - Express Response object
+   * Sets HttpOnly cookie with refresh token.
+   * Long-lived, scoped to /auth/refresh for security.
+   */
+  setRefreshTokenCookie(res: Response, token: string): void {
+    const isProduction = this.configService.get('NODE_ENV') === 'production';
+    const days =
+      this.configService.get<number>('auth.refreshTokenExpirationDays') || 7;
+
+    res.cookie(REFRESH_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: days * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh', // Only sent to the refresh endpoint
+    });
+  }
+
+  /**
+   * Clears the access token cookie.
    */
   clearAuthCookie(res: Response): void {
     res.clearCookie(AUTH_COOKIE_NAME, {
       httpOnly: true,
       secure: this.configService.get('NODE_ENV') === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       path: '/',
     });
+  }
+
+  /**
+   * Clears the refresh token cookie.
+   */
+  clearRefreshTokenCookie(res: Response): void {
+    res.clearCookie(REFRESH_COOKIE_NAME, {
+      httpOnly: true,
+      secure: this.configService.get('NODE_ENV') === 'production',
+      sameSite: 'lax',
+      path: '/auth/refresh',
+    });
+  }
+
+  /**
+   * Decode a JWT token without verifying signature.
+   * Used to extract jti and exp claims during logout.
+   */
+  decodeToken(token: string): { jti?: string; exp?: number } | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+      return payload;
+    } catch {
+      return null;
+    }
   }
 }

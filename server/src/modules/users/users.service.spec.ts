@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { Prisma, UserRole, User } from '@prisma/client';
+import { Prisma, UserRole, User } from '../../generated/prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 

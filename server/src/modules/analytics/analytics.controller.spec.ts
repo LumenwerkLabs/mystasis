@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Reflector } from '@nestjs/core';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { BiomarkerType, UserRole } from '@prisma/client';
+import { BiomarkerType, UserRole } from '../../generated/prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';

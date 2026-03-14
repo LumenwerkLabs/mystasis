@@ -3,6 +3,7 @@ import 'dart:io' show SocketException;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:mystasis/core/constants/api_endpoints.dart';
 import 'package:mystasis/core/services/storage_service.dart';
 
 /// Base exception for all API errors
@@ -66,10 +67,6 @@ abstract class HttpClientWrapper {
 }
 
 /// Default implementation using Dio (supports web, mobile, and desktop)
-///
-/// On web, enables `withCredentials` so the browser automatically:
-/// - Sends HttpOnly cookies with requests (for authentication)
-/// - Accepts Set-Cookie headers from the server
 class DioHttpClientWrapper implements HttpClientWrapper {
   final Dio _dio;
 
@@ -79,7 +76,6 @@ class DioHttpClientWrapper implements HttpClientWrapper {
               connectTimeout: const Duration(seconds: 30),
               receiveTimeout: const Duration(seconds: 30),
               validateStatus: (_) => true, // Handle all status codes manually
-              // Enable credentials for web (sends cookies with cross-origin requests)
               extra: kIsWeb ? {'withCredentials': true} : null,
             ));
 
@@ -136,11 +132,23 @@ class DioHttpClientWrapper implements HttpClientWrapper {
   }
 }
 
-/// HTTP client for making API requests with automatic auth header injection
+/// HTTP client with automatic token refresh on 401 responses.
+///
+/// When a request receives a 401:
+/// 1. Attempts to refresh the access token via /auth/refresh
+/// 2. On success: saves new tokens, retries the original request
+/// 3. On failure: calls [onSessionExpired] to force logout
+///
+/// Concurrent 401s are queued — only one refresh at a time.
 class ApiClient {
   final String baseUrl;
   final HttpClientWrapper _httpClient;
   final StorageService _storageService;
+  void Function()? _onSessionExpired;
+
+  bool _isRefreshing = false;
+  bool _sessionExpired = false;
+  final List<Completer<void>> _refreshQueue = [];
 
   ApiClient({
     required this.baseUrl,
@@ -148,6 +156,90 @@ class ApiClient {
     StorageService? storageService,
   })  : _httpClient = httpClient ?? DioHttpClientWrapper(),
         _storageService = storageService ?? StorageService();
+
+  /// Set callback invoked when session cannot be recovered (refresh fails).
+  /// This should trigger a forced logout and navigation to login.
+  void setSessionExpiredCallback(void Function() callback) {
+    _onSessionExpired = callback;
+  }
+
+  /// Make a GET request
+  Future<dynamic> get(String endpoint) async {
+    return _executeWithRefresh(
+      endpoint,
+      (headers) =>
+          _httpClient.get(Uri.parse('$baseUrl$endpoint'), headers: headers),
+    );
+  }
+
+  /// Make a POST request
+  Future<dynamic> post(String endpoint,
+      {Map<String, dynamic>? body, bool skipRefresh = false}) async {
+    if (skipRefresh) {
+      return _executeRequest(
+        () async {
+          final headers = await _buildHeaders();
+          return _httpClient.post(Uri.parse('$baseUrl$endpoint'),
+              headers: headers, body: body);
+        },
+      );
+    }
+    return _executeWithRefresh(
+      endpoint,
+      (headers) => _httpClient.post(Uri.parse('$baseUrl$endpoint'),
+          headers: headers, body: body),
+    );
+  }
+
+  /// Make a PUT request
+  Future<dynamic> put(String endpoint, {Map<String, dynamic>? body}) async {
+    return _executeWithRefresh(
+      endpoint,
+      (headers) => _httpClient.put(Uri.parse('$baseUrl$endpoint'),
+          headers: headers, body: body),
+    );
+  }
+
+  /// Make a DELETE request
+  Future<dynamic> delete(String endpoint) async {
+    return _executeWithRefresh(
+      endpoint,
+      (headers) =>
+          _httpClient.delete(Uri.parse('$baseUrl$endpoint'), headers: headers),
+    );
+  }
+
+  /// Endpoints where 401 means invalid credentials, not an expired token.
+  static const _noRefreshEndpoints = [
+    ApiEndpoints.login,
+    ApiEndpoints.register,
+    ApiEndpoints.refresh,
+  ];
+
+  /// Execute a request with automatic 401 → refresh → retry handling.
+  Future<dynamic> _executeWithRefresh(
+    String endpoint,
+    Future<HttpResponse> Function(Map<String, String> headers) makeRequest,
+  ) async {
+    final headers = await _buildHeaders();
+    try {
+      return await _executeRequest(() => makeRequest(headers));
+    } on UnauthorizedException {
+      // Don't attempt refresh for login/register/refresh endpoints
+      if (_noRefreshEndpoints.any((e) => endpoint.startsWith(e))) {
+        rethrow;
+      }
+
+      final refreshed = await tryRefreshToken();
+      if (!refreshed) {
+        throw const UnauthorizedException('Session expired');
+      }
+
+      // Retry with new token
+      final newHeaders = await _buildHeaders();
+      return await _executeRequest(() => makeRequest(newHeaders));
+    }
+  }
 
   /// Execute a request with common error handling
   Future<dynamic> _executeRequest(
@@ -175,69 +267,21 @@ class ApiClient {
     }
   }
 
-  /// Make a GET request
-  Future<dynamic> get(String endpoint) async {
-    final headers = await _buildHeaders();
-    return _executeRequest(
-      () => _httpClient.get(Uri.parse('$baseUrl$endpoint'), headers: headers),
-    );
-  }
-
-  /// Make a POST request
-  Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) async {
-    final headers = await _buildHeaders();
-    return _executeRequest(
-      () => _httpClient.post(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: headers,
-        body: body,
-      ),
-    );
-  }
-
-  /// Make a PUT request
-  Future<dynamic> put(String endpoint, {Map<String, dynamic>? body}) async {
-    final headers = await _buildHeaders();
-    return _executeRequest(
-      () => _httpClient.put(
-        Uri.parse('$baseUrl$endpoint'),
-        headers: headers,
-        body: body,
-      ),
-    );
-  }
-
-  /// Make a DELETE request
-  Future<dynamic> delete(String endpoint) async {
-    final headers = await _buildHeaders();
-    return _executeRequest(
-      () => _httpClient.delete(Uri.parse('$baseUrl$endpoint'), headers: headers),
-    );
-  }
-
-  /// Build headers with optional auth token.
-  ///
-  /// Platform-specific behavior:
-  /// - **Mobile**: Adds Authorization header with Bearer token from secure storage
-  /// - **Web**: Skips Authorization header (auth via HttpOnly cookies set by server)
+  /// Build headers with auth token from storage.
   Future<Map<String, String>> _buildHeaders() async {
     final headers = <String, String>{
       'Content-Type': 'application/json',
     };
 
-    // On web, authentication is handled via HttpOnly cookies (automatically
-    // sent by browser). On mobile, we need to add the Authorization header.
-    if (!kIsWeb) {
-      final token = await _storageService.getToken();
-      if (token != null && token.isNotEmpty) {
-        headers['Authorization'] = 'Bearer $token';
-      }
+    final token = await _storageService.getToken();
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
     }
 
     return headers;
   }
 
-  /// Handle API response and convert to appropriate exception if error
+  /// Handle API response, with transparent token refresh on 401.
   dynamic _handleResponse(HttpResponse response) {
     final message = _extractErrorMessage(response.body);
 
@@ -259,6 +303,81 @@ class ApiClient {
         throw ServerException(message);
       default:
         throw ApiException(message, statusCode: response.statusCode);
+    }
+  }
+
+  /// Attempt to refresh the access token using the stored refresh token.
+  /// Returns true if refresh succeeded, false if session is expired.
+  Future<bool> tryRefreshToken() async {
+    // If already refreshing, wait for the in-progress refresh
+    if (_isRefreshing) {
+      final completer = Completer<void>();
+      _refreshQueue.add(completer);
+      try {
+        await completer.future;
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    _isRefreshing = true;
+
+    try {
+      final refreshToken = await _storageService.getRefreshToken();
+      if (!kIsWeb && (refreshToken == null || refreshToken.isEmpty)) {
+        _failRefresh();
+        return false;
+      }
+
+      // Call refresh endpoint directly (skip the interceptor to avoid loops)
+      final headers = <String, String>{'Content-Type': 'application/json'};
+      final body = (refreshToken != null && refreshToken.isNotEmpty)
+          ? {'refresh_token': refreshToken}
+          : <String, dynamic>{};
+      final response = await _httpClient.post(
+        Uri.parse('$baseUrl${ApiEndpoints.refresh}'),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = response.body as Map<String, dynamic>;
+        final newAccessToken = data['access_token'] as String?;
+        final newRefreshToken = data['refresh_token'] as String?;
+
+        if (newAccessToken != null && newRefreshToken != null) {
+          await _storageService.saveToken(newAccessToken);
+          await _storageService.saveRefreshToken(newRefreshToken);
+          _sessionExpired = false;
+
+          // Resolve all queued requests
+          for (final completer in _refreshQueue) {
+            completer.complete();
+          }
+          _refreshQueue.clear();
+          _isRefreshing = false;
+          return true;
+        }
+      }
+
+      _failRefresh();
+      return false;
+    } catch (_) {
+      _failRefresh();
+      return false;
+    }
+  }
+
+  void _failRefresh() {
+    for (final completer in _refreshQueue) {
+      completer.completeError('Refresh failed');
+    }
+    _refreshQueue.clear();
+    _isRefreshing = false;
+    if (!_sessionExpired) {
+      _sessionExpired = true;
+      _onSessionExpired?.call();
     }
   }
 

@@ -19,7 +19,7 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { UserRole, Clinic } from '@prisma/client';
+import { UserRole, Clinic } from '../../generated/prisma/client';
 import { CookieService } from '../../common/services/cookie.service';
 import {
   ClinicsService,

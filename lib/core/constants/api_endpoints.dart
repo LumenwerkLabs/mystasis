@@ -1,7 +1,7 @@
 /// API endpoint constants for the Mystasis backend
 class ApiEndpoints {
   /// Base URL for the API
-  /// Supports environment configuration via --dart-define=API_BASE_URL=https://api.example.com
+  /// Supports environment configuration via flutter run -d chrome --web-port=3000 --dart-define=API_BASE_URL=https://api.mystasis.lumenwerklabs.com
   /// HTTP is only allowed for localhost during development
   static String get baseUrl {
     const envUrl = String.fromEnvironment('API_BASE_URL');
@@ -28,6 +28,7 @@ class ApiEndpoints {
   static const String register = '/auth/register';
   static const String login = '/auth/login';
   static const String logout = '/auth/logout';
+  static const String refresh = '/auth/refresh';
   static const String me = '/auth/me';
 
   // Health data endpoints

@@ -25,6 +25,13 @@ void main() {
     setUp(() {
       mockApiClient = MockApiClient();
       mockStorageService = MockStorageService();
+
+      // Default stubs for refresh token storage (used by all auth flows)
+      when(() => mockStorageService.saveRefreshToken(any()))
+          .thenAnswer((_) async {});
+      when(() => mockStorageService.getRefreshToken())
+          .thenAnswer((_) async => null);
+
       authService = AuthService(
         apiClient: mockApiClient,
         storageService: mockStorageService,
@@ -46,6 +53,7 @@ void main() {
 
         final responseData = {
           'access_token': 'new_jwt_token',
+          'refresh_token': 'new_refresh_token',
           'user': {
             'id': 'user_123',
             'email': email,
@@ -95,6 +103,7 @@ void main() {
         const token = 'new_jwt_token';
         final responseData = {
           'access_token': token,
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -128,6 +137,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -216,6 +226,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -261,6 +272,7 @@ void main() {
           // Arrange
           final responseData = {
             'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
             'user': {
               'id': 'user_123',
               'email': 'test@example.com',
@@ -307,6 +319,7 @@ void main() {
 
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': email,
@@ -342,6 +355,7 @@ void main() {
         const token = 'jwt_token';
         final responseData = {
           'access_token': token,
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -374,6 +388,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -434,6 +449,7 @@ void main() {
           // Arrange
           final responseData = {
             'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
             'user': {
               'id': 'user_123',
               'email': 'test@example.com',
@@ -523,6 +539,11 @@ void main() {
       test('should clear all stored data', () async {
         // Arrange
         when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
 
         // Act
         await authService.signOut();
@@ -534,10 +555,16 @@ void main() {
       test('should update auth state to null', () async {
         // Arrange
         when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
 
         // First sign in to have a user
         final signInResponse = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -575,12 +602,206 @@ void main() {
       test('should clear currentUser after signout', () async {
         // Arrange
         when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
 
         // Act
         await authService.signOut();
 
         // Assert
         expect(authService.currentUser, isNull);
+      });
+
+      test('should call POST /auth/logout with refresh token when token exists', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'stored_refresh_token');
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
+
+        // Act
+        await authService.signOut();
+
+        // Assert
+        verify(() => mockApiClient.post(
+              '/auth/logout',
+              body: {'refresh_token': 'stored_refresh_token'},
+              skipRefresh: true,
+            )).called(1);
+      });
+
+      test('should call POST /auth/logout with null body when no refresh token', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => null);
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
+
+        // Act
+        await authService.signOut();
+
+        // Assert
+        verify(() => mockApiClient.post(
+              '/auth/logout',
+              body: null,
+              skipRefresh: true,
+            )).called(1);
+      });
+
+      test('should use skipRefresh true when calling logout API', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenAnswer((_) async => {'message': 'ok'});
+
+        // Act
+        await authService.signOut();
+
+        // Assert
+        verify(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: true,
+            )).called(1);
+      });
+
+      test('should clear storage even when logout API throws', () async {
+        // Arrange
+        when(() => mockStorageService.getRefreshToken())
+            .thenAnswer((_) async => 'token');
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            )).thenThrow(Exception('Network error'));
+
+        // Act
+        await authService.signOut();
+
+        // Assert
+        verify(() => mockStorageService.clearAll()).called(1);
+        expect(authService.currentUser, isNull);
+      });
+    });
+
+    group('forceLogout', () {
+      test('should clear all stored data', () async {
+        // Arrange
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+
+        // Act
+        await authService.forceLogout();
+
+        // Assert
+        verify(() => mockStorageService.clearAll()).called(1);
+      });
+
+      test('should set currentUser to null', () async {
+        // Arrange - sign in first to have a user
+        final signInResponse = {
+          'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
+          'user': {
+            'id': 'user_123',
+            'email': 'test@example.com',
+            'birthdate': '1990-01-15',
+            'role': 'patient',
+          },
+        };
+        when(
+          () => mockApiClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer((_) async => signInResponse);
+        when(
+          () => mockStorageService.saveToken(any()),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockStorageService.saveUserId(any()),
+        ).thenAnswer((_) async {});
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+
+        await authService.signIn(
+          email: 'test@example.com',
+          password: 'password123',
+        );
+        expect(authService.currentUser, isNotNull);
+
+        // Act
+        await authService.forceLogout();
+
+        // Assert
+        expect(authService.currentUser, isNull);
+      });
+
+      test('should emit null through authStateChanges', () async {
+        // Arrange - sign in first to have a user
+        final signInResponse = {
+          'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
+          'user': {
+            'id': 'user_123',
+            'email': 'test@example.com',
+            'birthdate': '1990-01-15',
+            'role': 'patient',
+          },
+        };
+        when(
+          () => mockApiClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer((_) async => signInResponse);
+        when(
+          () => mockStorageService.saveToken(any()),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockStorageService.saveUserId(any()),
+        ).thenAnswer((_) async {});
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+
+        await authService.signIn(
+          email: 'test@example.com',
+          password: 'password123',
+        );
+
+        // Act
+        final nullEmitted = expectLater(
+          authService.authStateChanges,
+          emits(isNull),
+        );
+
+        await authService.forceLogout();
+
+        // Assert
+        await nullEmitted;
+      });
+
+      test('should not call the logout API endpoint', () async {
+        // Arrange
+        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+
+        // Act
+        await authService.forceLogout();
+
+        // Assert
+        verifyNever(() => mockApiClient.post(
+              any(),
+              body: any(named: 'body'),
+              skipRefresh: any(named: 'skipRefresh'),
+            ));
       });
     });
 
@@ -720,6 +941,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -766,6 +988,7 @@ void main() {
         // Pre-set user state by signing in
         final signInResponse = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -803,6 +1026,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -859,6 +1083,7 @@ void main() {
         // Arrange
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',
@@ -892,6 +1117,7 @@ void main() {
         // Arrange - sign in first
         final responseData = {
           'access_token': 'jwt_token',
+          'refresh_token': 'mock_refresh_token',
           'user': {
             'id': 'user_123',
             'email': 'test@example.com',

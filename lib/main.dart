@@ -1,7 +1,14 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:mystasis/core/constants/api_endpoints.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/services/api_client.dart';
+import 'package:mystasis/core/services/auth_service.dart';
+import 'package:mystasis/core/services/health_data_service.dart';
+import 'package:mystasis/core/services/llm_service.dart';
+import 'package:mystasis/core/services/storage_service.dart';
+import 'package:mystasis/core/services/users_service.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/patients_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
@@ -13,24 +20,75 @@ import 'package:mystasis/screens/auth/forgot_password_screen.dart';
 import 'package:mystasis/screens/dashboard/clinician_dashboard.dart';
 import 'package:mystasis/screens/health_sync/apple_health_sync_screen.dart';
 import 'package:mystasis/screens/mobile_home_screen.dart';
+import 'package:mystasis/screens/insights/patient_insights_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MystasisApp());
+
+  // Single shared instances — all providers and services use the same
+  // StorageService and ApiClient, ensuring consistent token management.
+  final storageService = StorageService();
+  final apiClient = ApiClient(
+    baseUrl: ApiEndpoints.baseUrl,
+    storageService: storageService,
+  );
+  final authService = AuthService(
+    apiClient: apiClient,
+    storageService: storageService,
+  );
+  final healthDataService = HealthDataService(apiClient: apiClient);
+  final usersService = UsersService(apiClient: apiClient);
+  final llmService = LlmService(apiClient: apiClient);
+
+  // Wire session expiry: when token refresh fails, force logout.
+  // AuthService.forceLogout() emits null auth state → AuthWrapper shows LoginScreen.
+  apiClient.setSessionExpiredCallback(() {
+    authService.forceLogout().catchError((_) {});
+  });
+
+  runApp(MystasisApp(
+    storageService: storageService,
+    authService: authService,
+    healthDataService: healthDataService,
+    usersService: usersService,
+    llmService: llmService,
+  ));
 }
 
 class MystasisApp extends StatelessWidget {
-  const MystasisApp({super.key});
+  final StorageService storageService;
+  final AuthService authService;
+  final HealthDataService healthDataService;
+  final UsersService usersService;
+  final LlmService llmService;
+
+  const MystasisApp({
+    super.key,
+    required this.storageService,
+    required this.authService,
+    required this.healthDataService,
+    required this.usersService,
+    required this.llmService,
+  });
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => PatientsProvider()),
-        ChangeNotifierProvider(create: (_) => BiomarkersProvider()),
-        ChangeNotifierProvider(create: (_) => InsightsProvider()),
-        ChangeNotifierProvider(create: (_) => HealthSyncProvider()),
+        ChangeNotifierProvider(
+            create: (_) => AuthProvider(authService: authService)),
+        ChangeNotifierProvider(
+            create: (_) => PatientsProvider(usersService: usersService)),
+        ChangeNotifierProvider(
+            create: (_) =>
+                BiomarkersProvider(healthDataService: healthDataService)),
+        ChangeNotifierProvider(
+            create: (_) => InsightsProvider(llmService: llmService)),
+        ChangeNotifierProvider(
+            create: (_) => HealthSyncProvider(
+                  healthDataService: healthDataService,
+                  storageService: storageService,
+                )),
       ],
       child: MaterialApp(
         title: 'Mystasis',
@@ -66,6 +124,13 @@ class MystasisApp extends StatelessWidget {
               return MaterialPageRoute(
                 builder: (_) => const _AuthRouteGuard(
                   child: AppleHealthSyncScreen(),
+                ),
+                settings: settings,
+              );
+            case '/insights':
+              return MaterialPageRoute(
+                builder: (_) => const _AuthRouteGuard(
+                  child: PatientInsightsScreen(),
                 ),
                 settings: settings,
               );
@@ -130,14 +195,16 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        if (auth.isAuthenticated) {
-          // Clinician on web → clinician dashboard, all others → mobile home
-          if (kIsWeb && auth.user!.isClinician) {
-            return const ClinicianDashboard();
-          }
-          return const MobileHomeScreen();
+        if (!auth.isAuthenticated) return const LoginScreen();
+
+        if (kIsWeb) {
+          // Web is clinician-only
+          if (auth.user!.isClinician) return const ClinicianDashboard();
+          return const WebPatientNotSupportedScreen();
         }
-        return const LoginScreen();
+
+        // Mobile: all authenticated users
+        return const MobileHomeScreen();
       },
     );
   }
@@ -160,7 +227,7 @@ class _AuthRouteGuard extends StatelessWidget {
 
 /// Route guard that requires clinician role.
 /// Redirects to LoginScreen if not authenticated,
-/// or MobileHomeScreen if authenticated but not a clinician.
+/// or the not-supported screen if authenticated but not a clinician.
 class _ClinicianRouteGuard extends StatelessWidget {
   const _ClinicianRouteGuard();
 
@@ -168,7 +235,63 @@ class _ClinicianRouteGuard extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     if (!auth.isAuthenticated) return const LoginScreen();
-    if (!auth.user!.isClinician) return const MobileHomeScreen();
+    if (!auth.user!.isClinician) return const WebPatientNotSupportedScreen();
     return const ClinicianDashboard();
+  }
+}
+
+/// Static page shown when a patient accesses the web app.
+/// The web app is clinician-only; patients use the mobile app.
+class WebPatientNotSupportedScreen extends StatelessWidget {
+  const WebPatientNotSupportedScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.phone_iphone,
+                size: 64,
+                color: MystasisTheme.deepBioTeal.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Mystasis is designed for mobile',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Download the Mystasis app on your phone to view your '
+                'biomarker trends, sync health data, and receive '
+                'personalized wellness insights.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: MystasisTheme.neutralGrey,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              OutlinedButton(
+                onPressed: () => context.read<AuthProvider>().signOut(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: MystasisTheme.deepBioTeal,
+                  side: const BorderSide(color: MystasisTheme.deepBioTeal),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                ),
+                child: const Text('Sign out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

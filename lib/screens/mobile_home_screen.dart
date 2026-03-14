@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/widgets/medical_disclaimer.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/health_sync_provider.dart';
+import 'package:mystasis/providers/insights_provider.dart';
+import 'package:mystasis/screens/insights/patient_insights_screen.dart';
 
 /// Minimal mobile home screen for patients.
 ///
@@ -21,6 +24,13 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HealthSyncProvider>().initialize();
+      final auth = context.read<AuthProvider>();
+      if (auth.isAuthenticated && auth.user != null) {
+        final insights = context.read<InsightsProvider>();
+        if (insights.currentNudge == null && !insights.isLoadingNudge) {
+          insights.generateNudge(auth.user!.id);
+        }
+      }
     });
   }
 
@@ -78,32 +88,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
 
               const SizedBox(height: 24),
 
-              // Info text
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: MystasisTheme.deepBioTeal.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.info_outline,
-                      size: 20,
-                      color: MystasisTheme.deepBioTeal,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'View your biomarker trends and insights on the Mystasis web dashboard.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: MystasisTheme.deepBioTeal,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
+              // Wellness nudge card
+              Consumer<InsightsProvider>(
+                builder: (context, provider, _) {
+                  return _NudgeCard(provider: provider);
+                },
               ),
             ],
           ),
@@ -338,5 +327,241 @@ class _SyncCard extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${timestamp.month}/${timestamp.day}/${timestamp.year}';
+  }
+}
+
+class _NudgeCard extends StatelessWidget {
+  final InsightsProvider provider;
+
+  const _NudgeCard({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    if (provider.isLoadingNudge) {
+      return _buildContainer(
+        context,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2.5),
+            ),
+            const SizedBox(width: 16),
+            Text(
+              'Getting your wellness tip...',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: MystasisTheme.neutralGrey,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (provider.nudgeError != null) {
+      return _buildContainer(
+        context,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child:
+                      Icon(Icons.error_outline, color: Colors.red[400], size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Could not load tip',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        provider.nudgeError!,
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: MystasisTheme.neutralGrey,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => _refreshNudge(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: MystasisTheme.deepBioTeal,
+                ),
+                child: const Text('Try Again'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final nudge = provider.currentNudge;
+    if (nudge == null) {
+      return _buildContainer(
+        context,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: MystasisTheme.deepBioTeal.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.auto_awesome,
+                      color: MystasisTheme.deepBioTeal, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Get a personalized wellness tip based on your health data.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: MystasisTheme.neutralGrey,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _refreshNudge(context),
+                icon: const Icon(Icons.auto_awesome),
+                label: const Text('Get a Wellness Tip'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: MystasisTheme.deepBioTeal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Success state — show nudge content
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PatientInsightsScreen()),
+        );
+      },
+      child: _buildContainer(
+        context,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: MystasisTheme.deepBioTeal.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.auto_awesome,
+                      color: MystasisTheme.deepBioTeal, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Wellness Tip',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap to see more',
+                        style:
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: MystasisTheme.neutralGrey,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: MystasisTheme.neutralGrey),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              nudge.content,
+              style: Theme.of(context).textTheme.bodyMedium,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            const MedicalDisclaimer(),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => _refreshNudge(context),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Get New Tip'),
+                style: TextButton.styleFrom(
+                  foregroundColor: MystasisTheme.deepBioTeal,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _refreshNudge(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    if (auth.isAuthenticated && auth.user != null) {
+      context.read<InsightsProvider>().generateNudge(auth.user!.id);
+    }
+  }
+
+  Widget _buildContainer(BuildContext context, {required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
   }
 }

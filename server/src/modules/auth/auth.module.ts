@@ -18,7 +18,7 @@ import { UsersModule } from '../users/users.module';
  * @remarks
  * This module requires the following configuration:
  * - auth.jwtSecret: Secret key for signing JWTs (min 32 characters)
- * - auth.jwtExpiration: Token expiration time (default '24h')
+ * - auth.accessTokenExpiration: Access token lifetime (default '15m')
  *
  * Dependencies:
  * - ConfigModule (global): For JWT configuration
@@ -48,7 +48,7 @@ import { UsersModule } from '../users/users.module';
         return {
           secret,
           signOptions: {
-            expiresIn: configService.get<number>('auth.jwtExpiration') || 86400, // 24 hours in seconds
+            expiresIn: 900, // 15 minutes in seconds
           },
         };
       },

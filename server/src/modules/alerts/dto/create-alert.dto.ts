@@ -11,7 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BiomarkerType, AlertSeverity } from '@prisma/client';
+import { BiomarkerType, AlertSeverity } from '../../../generated/prisma/client';
 
 /**
  * DTO for creating a new alert.

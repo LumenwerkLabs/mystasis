@@ -6,7 +6,7 @@ import {
   AlertStatus,
   Prisma,
   Alert,
-} from '@prisma/client';
+} from '../../generated/prisma/client';
 
 /**
  * Service for managing health alerts in the Mystasis platform.

@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { BiomarkerType, UserRole } from '@prisma/client';
+import { BiomarkerType, UserRole } from '../../generated/prisma/client';
 import { AnalyticsService } from './analytics.service';
 import {
   GetAnalyticsQueryDto,

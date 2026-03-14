@@ -6,7 +6,7 @@ import {
   AlertSeverity,
   AlertStatus,
   UserRole,
-} from '@prisma/client';
+} from '../../generated/prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';

@@ -7,7 +7,7 @@ import {
   BiomarkerType,
   BiomarkerValue,
   LLMSummary,
-} from '@prisma/client';
+} from '../../generated/prisma/client';
 import { of, throwError } from 'rxjs';
 import { LlmService } from './llm.service';
 import { PrismaService } from '../../core/prisma/prisma.service';

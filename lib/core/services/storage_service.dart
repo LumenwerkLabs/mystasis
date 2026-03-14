@@ -111,6 +111,7 @@ SecureStorageWrapper createPlatformStorageWrapper() {
 /// 3. Token is inaccessible to JavaScript (XSS protection)
 class StorageService {
   static const String _tokenKey = 'auth_token';
+  static const String _refreshTokenKey = 'refresh_token';
   static const String _userIdKey = 'user_id';
   static const String _lastHealthSyncKey = 'last_health_sync';
 
@@ -133,6 +134,24 @@ class StorageService {
   Future<String?> getToken() async {
     try {
       return await _secureStorage.read(key: _tokenKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Save the refresh token
+  Future<void> saveRefreshToken(String token) async {
+    try {
+      await _secureStorage.write(key: _refreshTokenKey, value: token);
+    } catch (e) {
+      throw StorageException('Failed to save refresh token: $e');
+    }
+  }
+
+  /// Retrieve the stored refresh token
+  Future<String?> getRefreshToken() async {
+    try {
+      return await _secureStorage.read(key: _refreshTokenKey);
     } catch (e) {
       return null;
     }

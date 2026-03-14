@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
-import { UserRole } from '@prisma/client';
+import { UserRole } from '../../generated/prisma/client';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { TokenBlacklistService } from '../../common/services/token-blacklist.service';
 import { AUTH_COOKIE_NAME } from '../../common/services/cookie.service';
 
 /**
@@ -15,55 +16,34 @@ interface JwtPayload {
   email: string;
   role: UserRole;
   clinicId?: string;
+  jti?: string;
   iat?: number;
   exp?: number;
 }
 
 /**
  * Extracts JWT token from either HttpOnly cookie or Authorization header.
- * Prioritizes cookie for web clients, falls back to header for mobile clients.
  */
 function extractJwtFromCookieOrHeader(req: Request): string | null {
-  // First, try to extract from HttpOnly cookie (web clients)
   if (req.cookies && req.cookies[AUTH_COOKIE_NAME]) {
     return req.cookies[AUTH_COOKIE_NAME] as string;
   }
-  // Fall back to Authorization header (mobile clients)
   return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
 }
 
 /**
- * Passport JWT authentication strategy.
+ * Passport JWT strategy with token blacklist checking.
  *
- * @description Implements JWT token validation for protected routes using
- * Passport.js. Extracts the JWT token from either an HttpOnly cookie (for web
- * clients with XSS protection) or the Authorization header (for mobile clients).
- *
- * @remarks
- * This strategy is used by JwtAuthGuard to protect routes. The validate()
- * method is called after the token is verified, and its return value is
- * attached to request.user.
- *
- * Configuration:
- * - JWT secret is loaded from auth.jwtSecret config
- * - Token is extracted from cookie first, then Authorization header
- * - Expired tokens are rejected
- *
- * Security:
- * - Web clients use HttpOnly cookies (immune to XSS)
- * - Mobile clients use Authorization header (stored in secure storage)
- *
- * @example
- * // The strategy is automatically used when JwtAuthGuard is applied
- * @UseGuards(JwtAuthGuard)
- * @Get('protected')
- * getProtectedResource(@CurrentUser() user: UserPayload) {
- *   return user;
- * }
+ * After verifying the JWT signature and expiration, the validate() method
+ * checks whether the token's `jti` has been blacklisted (revoked).
+ * This enables immediate session termination on logout.
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
+  ) {
     const secret = configService.get<string>('auth.jwtSecret');
     if (!secret) {
       throw new Error('JWT secret is not configured');
@@ -77,26 +57,24 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   /**
-   * Validates the JWT payload and returns the user payload.
-   *
-   * @description Called by Passport after the JWT signature is verified.
-   * Transforms the raw JWT payload into a UserPayload object that will
-   * be attached to request.user.
-   *
-   * @param payload - The decoded JWT payload
-   * @returns UserPayload object with user identification data
-   *
-   * @example
-   * // Input payload from JWT
-   * { sub: 'user-123', email: 'user@example.com', role: 'PATIENT' }
-   *
-   * // Output UserPayload
-   * { sub: 'user-123', id: 'user-123', email: 'user@example.com', role: 'PATIENT' }
+   * Validates the JWT payload, checking the blacklist before accepting.
    */
-  validate(payload: JwtPayload): UserPayload {
+  async validate(payload: JwtPayload): Promise<UserPayload> {
+    // All tokens must have a jti claim for revocation support
+    if (!payload.jti) {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    const isBlacklisted = await this.tokenBlacklistService.isBlacklisted(
+      payload.jti,
+    );
+    if (isBlacklisted) {
+      throw new UnauthorizedException('Token has been revoked');
+    }
+
     return {
       sub: payload.sub,
-      id: payload.sub, // Alias for convenience
+      id: payload.sub,
       email: payload.email,
       role: payload.role,
       clinicId: payload.clinicId,

@@ -6,7 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole, Clinic } from '@prisma/client';
+import { UserRole, Clinic } from '../../generated/prisma/client';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { CreateClinicDto, UpdateClinicDto } from './dto';
 

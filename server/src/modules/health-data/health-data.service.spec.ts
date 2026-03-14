@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { BiomarkerType, BiomarkerValue } from '@prisma/client';
+import { BiomarkerType, BiomarkerValue } from '../../generated/prisma/client';
 import { HealthDataService } from './health-data.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
 

@@ -10,7 +10,7 @@ import {
   SummaryType,
   UserRole,
   BiomarkerValue,
-} from '@prisma/client';
+} from '../../generated/prisma/client';
 import { Observable, firstValueFrom } from 'rxjs';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { HealthDataService } from '../health-data/health-data.service';

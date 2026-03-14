@@ -5,7 +5,8 @@ import { registerAs } from '@nestjs/config';
  */
 export interface AuthConfig {
   jwtSecret: string;
-  jwtExpiration: string;
+  accessTokenExpiration: string;
+  refreshTokenExpirationDays: number;
 }
 
 /**
@@ -40,11 +41,17 @@ function validateJwtSecret(secret: string | undefined): string {
  */
 function createAuthConfig(): AuthConfig {
   const jwtSecret = validateJwtSecret(process.env.JWT_SECRET);
-  const jwtExpiration = process.env.JWT_EXPIRATION || '24h';
+  const accessTokenExpiration =
+    process.env.JWT_ACCESS_EXPIRATION || '15m';
+  const refreshTokenExpirationDays = parseInt(
+    process.env.JWT_REFRESH_EXPIRATION_DAYS || '7',
+    10,
+  );
 
   return {
     jwtSecret,
-    jwtExpiration,
+    accessTokenExpiration,
+    refreshTokenExpirationDays,
   };
 }
 
@@ -54,11 +61,12 @@ function createAuthConfig(): AuthConfig {
  *
  * @description Provides JWT settings for authentication:
  * - jwtSecret: Secret key for signing JWTs (required, min 32 chars)
- * - jwtExpiration: Token expiration time (optional, default '24h')
+ * - accessTokenExpiration: Access token lifetime (default '15m')
+ * - refreshTokenExpirationDays: Refresh token lifetime in days (default 7)
  *
  * @example
  * // Access via ConfigService
  * const secret = configService.get<string>('auth.jwtSecret');
- * const expiration = configService.get<string>('auth.jwtExpiration');
+ * const days = configService.get<number>('auth.refreshTokenExpirationDays');
  */
 export const authConfig = registerAs('auth', createAuthConfig);

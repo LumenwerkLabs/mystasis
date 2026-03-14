@@ -7,7 +7,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { BiomarkerType } from '@prisma/client';
+import { BiomarkerType } from '../../../generated/prisma/client';
 
 /**
  * Base DTO for biomarker data fields.

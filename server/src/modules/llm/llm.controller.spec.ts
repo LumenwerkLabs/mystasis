@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { SummaryType, UserRole } from '@prisma/client';
+import { SummaryType, UserRole } from '../../generated/prisma/client';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { LLM_RATE_LIMIT_KEY } from '../../common/decorators/llm-rate-limit.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';

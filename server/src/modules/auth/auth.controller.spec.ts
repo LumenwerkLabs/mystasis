@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ConflictException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UserRole, User } from '@prisma/client';
+import { UserRole, User } from '../../generated/prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CookieService } from '../../common/services/cookie.service';
 
@@ -44,6 +44,7 @@ type UserWithoutPassword = Omit<User, 'password'>;
 // AuthService response interfaces
 interface AuthResponse {
   access_token: string;
+  refresh_token: string;
   user: UserWithoutPassword;
 }
 
@@ -59,6 +60,7 @@ interface UserPayload {
 interface MockAuthService {
   register: jest.Mock<Promise<AuthResponse>>;
   login: jest.Mock<Promise<AuthResponse>>;
+  logout: jest.Mock<Promise<void>>;
 }
 
 // Mock Express Response for cookie operations
@@ -106,6 +108,7 @@ describe('AuthController', () => {
 
   const mockAuthResponse: AuthResponse = {
     access_token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mocktoken',
+    refresh_token: 'mock-refresh-token-hex',
     user: mockUserWithoutPassword,
   };
 
@@ -121,6 +124,7 @@ describe('AuthController', () => {
     mockAuthService = {
       register: jest.fn(),
       login: jest.fn(),
+      logout: jest.fn().mockResolvedValue(undefined),
     };
 
     mockResponse = {
@@ -141,7 +145,13 @@ describe('AuthController', () => {
       // Mock CookieService
       const mockCookieService = {
         setAuthCookie: jest.fn(),
+        setRefreshTokenCookie: jest.fn(),
         clearAuthCookie: jest.fn(),
+        clearRefreshTokenCookie: jest.fn(),
+        decodeToken: jest.fn().mockReturnValue({
+          jti: 'mock-jti',
+          exp: Math.floor(Date.now() / 1000) + 900,
+        }),
       };
 
       const module: TestingModule = await Test.createTestingModule({
@@ -232,6 +242,7 @@ describe('AuthController', () => {
         };
         const minimalResponse: AuthResponse = {
           access_token: 'token',
+          refresh_token: 'refresh-token',
           user: {
             id: 'user-id',
             email: minimalDto.email,
