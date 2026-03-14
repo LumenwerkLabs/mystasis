@@ -4,7 +4,7 @@
 # ===========================================
 
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 # Install dependencies needed for native modules
@@ -22,7 +22,7 @@ RUN npm ci
 RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -36,11 +36,11 @@ COPY --from=deps /app/src/generated ./src/generated
 COPY . .
 
 # Build the application, then copy raw generated prisma client into dist
-# (tsc doesn't rewrite .ts import extensions, so we use the originals)
+# (Prisma 7 generates .ts files that are valid CJS; Node 22 loads them natively)
 RUN npm run build && cp -r src/generated dist/src/generated
 
 # Stage 3: Production
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 WORKDIR /app
 
 # Install necessary runtime dependencies
@@ -58,13 +58,13 @@ ENV PORT=3000
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy Prisma schema and config (needed for migrations)
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
-# Copy built application (dist/ includes raw generated prisma client)
+# Copy built application (dist/ includes generated prisma client)
 COPY --from=builder /app/dist ./dist
 
 # Change ownership to non-root user
