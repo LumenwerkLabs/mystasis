@@ -35,9 +35,11 @@ COPY --from=deps /app/src/generated ./src/generated
 # Copy source code
 COPY . .
 
-# Build the application, then copy raw generated prisma client into dist
-# (Prisma 7 generates .ts files that are valid CJS; Node 22 loads them natively)
-RUN npm run build && cp -r src/generated dist/src/generated
+# Build the application
+# Prisma 7 generates .ts extension imports that tsc preserves in compiled output.
+# Node.js CJS require() cannot resolve .ts extensions, so we fix them post-build.
+RUN npm run build && \
+    find dist/src/generated -name '*.js' -exec sed -i "s/\.ts\"/\.js\"/g; s/\.ts'/\.js'/g" {} +
 
 # Stage 3: Production
 FROM node:22-alpine AS production
