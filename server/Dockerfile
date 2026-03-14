@@ -35,8 +35,9 @@ COPY --from=deps /app/src/generated ./src/generated
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# Build the application, then copy raw generated prisma client into dist
+# (tsc doesn't rewrite .ts import extensions, so we use the originals)
+RUN npm run build && cp -r src/generated dist/src/generated
 
 # Stage 3: Production
 FROM node:20-alpine AS production
@@ -63,7 +64,7 @@ RUN npm ci --only=production && npm cache clean --force
 COPY prisma ./prisma
 COPY prisma.config.ts ./
 
-# Copy built application (includes compiled generated client in dist/)
+# Copy built application (dist/ includes raw generated prisma client)
 COPY --from=builder /app/dist ./dist
 
 # Change ownership to non-root user
