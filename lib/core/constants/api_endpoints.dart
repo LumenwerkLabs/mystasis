@@ -50,6 +50,7 @@ class ApiEndpoints {
 
   // Anamnesis endpoints
   static const String anamnesis = '/anamnesis';
+  static const String transcriptionToken = '/anamnesis/transcription-token';
   static String anamnesisForPatient(String patientId) =>
       '/anamnesis/patient/$patientId';
   static String anamnesisById(String id) => '/anamnesis/$id';

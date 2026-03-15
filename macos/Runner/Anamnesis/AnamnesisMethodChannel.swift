@@ -64,6 +64,7 @@ class AnamnesisMethodChannel: NSObject {
             result([
                 "speechAvailable": transcriptionService.isAvailable,
                 "foundationModelsAvailable": foundationModelsAvailable,
+                "elevenLabsConfigured": transcriptionService is ElevenLabsTranscriptionService && transcriptionService.isAvailable,
             ])
 
         case "requestMicrophonePermission":
@@ -88,6 +89,7 @@ class AnamnesisMethodChannel: NSObject {
                                 "text": update.text,
                                 "isFinal": update.isFinal,
                                 "confidence": update.confidence ?? -1.0,
+                                "isError": update.isError,
                             ])
                         }
                     }
@@ -139,15 +141,35 @@ class AnamnesisMethodChannel: NSObject {
             }
 
         case "setTranscriptionBackend":
+            // Prevent switching backends during an active recording
+            if transcriptionService.isAvailable,
+               transcriptStreamTask != nil {
+                result(FlutterError(
+                    code: "INVALID_STATE",
+                    message: "Cannot change transcription backend during an active recording",
+                    details: nil
+                ))
+                return
+            }
             let args = call.arguments as? [String: Any]
             let backend = args?["backend"] as? String ?? "onDevice"
+            let token = args?["token"] as? String
             switch backend {
             case "elevenLabs":
-                transcriptionService = ElevenLabsTranscriptionService()
+                let service = ElevenLabsTranscriptionService()
+                if let token { service.configure(apiKey: token) }
+                transcriptionService = service
             default:
                 transcriptionService = OnDeviceTranscriptionService()
             }
             result(nil)
+
+        case "getTranscriptionBackend":
+            if transcriptionService is ElevenLabsTranscriptionService {
+                result("elevenLabs")
+            } else {
+                result("onDevice")
+            }
 
         default:
             result(FlutterMethodNotImplemented)

@@ -1,6 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { Prisma } from '../../generated/prisma/client';
+import { HTTP_SERVICE_TOKEN } from './anamnesis.constants';
 
 /**
  * Service for managing structured clinical anamnesis records.
@@ -19,7 +29,13 @@ import { Prisma } from '../../generated/prisma/client';
  */
 @Injectable()
 export class AnamnesisService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AnamnesisService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+    @Inject(HTTP_SERVICE_TOKEN) private readonly httpService: { post: (...args: any[]) => any },
+  ) {}
 
   /**
    * Creates a new anamnesis record.
@@ -218,5 +234,77 @@ export class AnamnesisService {
     return this.prisma.anamnesis.delete({
       where: { id },
     });
+  }
+
+  /**
+   * Generates a single-use ElevenLabs temporary token for client-side
+   * WebSocket Speech-to-Text connections.
+   *
+   * @description The token expires after 15 minutes and is consumed on first use.
+   * The real ElevenLabs API key never leaves the server.
+   *
+   * @returns Object containing the temporary token
+   * @throws {ServiceUnavailableException} When ELEVENLABS_API_KEY is not configured
+   * @throws {InternalServerErrorException} When token generation fails
+   */
+  async generateTranscriptionToken(
+    clinicianId: string,
+  ): Promise<{ token: string }> {
+    const apiKey = this.configService.get<string>('elevenlabs.apiKey');
+    const apiUrl = this.configService.get<string>('elevenlabs.apiUrl');
+
+    if (!apiKey?.trim()) {
+      throw new ServiceUnavailableException(
+        'Cloud transcription is not available.',
+      );
+    }
+
+    this.logger.log(
+      `Transcription token requested by clinician ${clinicianId}`,
+    );
+
+    try {
+      const response = await firstValueFrom(
+        this.httpService.post(
+          `${apiUrl}/v1/single-use-token/realtime_scribe`,
+          null,
+          {
+            headers: { 'xi-api-key': apiKey.trim() },
+            timeout: 10_000,
+          },
+        ),
+      );
+
+      const token = response?.data?.token;
+      if (!token || typeof token !== 'string') {
+        this.logger.error(
+          'ElevenLabs returned an unexpected response structure',
+        );
+        throw new InternalServerErrorException(
+          'Failed to generate transcription token.',
+        );
+      }
+
+      this.logger.log(
+        `Transcription token issued for clinician ${clinicianId}`,
+      );
+      return { token };
+    } catch (error) {
+      // Re-throw NestJS exceptions as-is
+      if (
+        error instanceof InternalServerErrorException ||
+        error instanceof ServiceUnavailableException
+      ) {
+        throw error;
+      }
+
+      // Log the real error server-side, return a safe message to the client
+      this.logger.error(
+        `Failed to generate ElevenLabs token: ${error?.message ?? error}`,
+      );
+      throw new InternalServerErrorException(
+        'Failed to generate transcription token.',
+      );
+    }
   }
 }

@@ -106,6 +106,29 @@ export class AnamnesisController {
   }
 
   /**
+   * Generate a temporary ElevenLabs transcription token.
+   *
+   * @description Returns a single-use token (15 min expiry) for client-side
+   * WebSocket connection to ElevenLabs real-time STT. The real API key
+   * never leaves the server.
+   */
+  @Post('transcription-token')
+  @Roles(UserRole.CLINICIAN)
+  @ApiOperation({
+    summary: 'Generate a temporary ElevenLabs transcription token',
+    description:
+      'Returns a single-use token (15 min expiry) for client-side WebSocket connection to ElevenLabs STT. Only clinicians can request tokens.',
+  })
+  @ApiResponse({ status: 201, description: 'Token generated' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - CLINICIAN role required' })
+  @ApiResponse({ status: 500, description: 'Token generation failed' })
+  @ApiResponse({ status: 503, description: 'Cloud transcription not configured' })
+  async getTranscriptionToken(@CurrentUser() user: UserPayload) {
+    return this.anamnesisService.generateTranscriptionToken(user.sub);
+  }
+
+  /**
    * Get paginated anamneses for a patient.
    */
   @Get('patient/:patientId')

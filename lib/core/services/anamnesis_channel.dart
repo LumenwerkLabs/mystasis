@@ -8,11 +8,14 @@ class TranscriptUpdate {
   final String text;
   final bool isFinal;
   final double? confidence;
+  /// When true, [text] contains an error message rather than transcript content.
+  final bool isError;
 
   const TranscriptUpdate({
     required this.text,
     required this.isFinal,
     this.confidence,
+    this.isError = false,
   });
 
   factory TranscriptUpdate.fromMap(Map<dynamic, dynamic> map) {
@@ -23,6 +26,7 @@ class TranscriptUpdate {
       confidence: (rawConfidence != null && rawConfidence >= 0)
           ? rawConfidence
           : null,
+      isError: map['isError'] as bool? ?? false,
     );
   }
 }
@@ -31,13 +35,17 @@ class TranscriptUpdate {
 class AnamnesisAvailability {
   final bool speechAvailable;
   final bool foundationModelsAvailable;
+  final bool elevenLabsConfigured;
 
   const AnamnesisAvailability({
     required this.speechAvailable,
     required this.foundationModelsAvailable,
+    this.elevenLabsConfigured = false,
   });
 
-  bool get isFullyAvailable => speechAvailable && foundationModelsAvailable;
+  /// Available if Foundation Models works and at least one transcription backend is ready.
+  bool get isFullyAvailable =>
+      (speechAvailable || elevenLabsConfigured) && foundationModelsAvailable;
 }
 
 /// Platform channel client for native macOS anamnesis features.
@@ -71,6 +79,8 @@ class AnamnesisChannel {
         speechAvailable: result?['speechAvailable'] as bool? ?? false,
         foundationModelsAvailable:
             result?['foundationModelsAvailable'] as bool? ?? false,
+        elevenLabsConfigured:
+            result?['elevenLabsConfigured'] as bool? ?? false,
       );
     } on PlatformException {
       return const AnamnesisAvailability(
@@ -135,8 +145,19 @@ class AnamnesisChannel {
   }
 
   /// Switch the transcription backend (e.g., "onDevice" or "elevenLabs").
-  Future<void> setTranscriptionBackend(String backend) async {
-    await _methodChannel
-        .invokeMethod('setTranscriptionBackend', {'backend': backend});
+  /// Pass [token] when switching to a cloud backend — this should be a
+  /// server-issued single-use temporary token, not a raw API key.
+  Future<void> setTranscriptionBackend(String backend, {String? token}) async {
+    await _methodChannel.invokeMethod('setTranscriptionBackend', {
+      'backend': backend,
+      if (token != null) 'token': token,
+    });
+  }
+
+  /// Get the currently active transcription backend identifier.
+  Future<String> getTranscriptionBackend() async {
+    final result =
+        await _methodChannel.invokeMethod<String>('getTranscriptionBackend');
+    return result ?? 'onDevice';
   }
 }

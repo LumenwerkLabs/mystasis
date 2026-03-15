@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Strategy Protocol
 
 /// Strategy protocol for transcription backends.
-/// Allows swapping between on-device Speech and future cloud APIs (e.g., ElevenLabs).
+/// Allows swapping between on-device Speech and cloud APIs (e.g., ElevenLabs).
 protocol TranscriptionService: AnyObject {
     /// Start a live transcription session. Returns an AsyncStream of partial transcripts.
     func startTranscription(locale: Locale) async throws -> AsyncStream<TranscriptionUpdate>
@@ -13,6 +13,16 @@ protocol TranscriptionService: AnyObject {
     var isAvailable: Bool { get }
     /// Human-readable name for UI display.
     var displayName: String { get }
+    /// Whether this service requires an API key to function.
+    var apiKeyRequired: Bool { get }
+    /// Configure the service with an API key. No-op for services that don't require one.
+    func configure(apiKey: String)
+}
+
+/// Default implementations for services that don't require API keys.
+extension TranscriptionService {
+    var apiKeyRequired: Bool { false }
+    func configure(apiKey: String) {}
 }
 
 // MARK: - Data Types
@@ -22,6 +32,15 @@ struct TranscriptionUpdate: Sendable {
     let text: String
     let isFinal: Bool
     let confidence: Double?
+    /// When true, `text` contains an error message rather than transcript content.
+    let isError: Bool
+
+    init(text: String, isFinal: Bool, confidence: Double?, isError: Bool = false) {
+        self.text = text
+        self.isFinal = isFinal
+        self.confidence = confidence
+        self.isError = isError
+    }
 }
 
 /// Errors that can occur during transcription.

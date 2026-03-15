@@ -13,10 +13,16 @@ class AnamnesisService {
   AnamnesisService({required ApiClient apiClient}) : _apiClient = apiClient;
 
   /// Save a reviewed anamnesis to the backend.
+  ///
+  /// Strips `id` and `clinicianId` from the body — the backend auto-generates
+  /// the ID and sets clinicianId from the JWT token.
   Future<AnamnesisModel> create(AnamnesisModel anamnesis) async {
+    final body = anamnesis.toJson()
+      ..remove('id')
+      ..remove('clinicianId');
     final response = await _apiClient.post(
       ApiEndpoints.anamnesis,
-      body: anamnesis.toJson(),
+      body: body,
     );
     return AnamnesisModel.fromJson(response as Map<String, dynamic>);
   }
@@ -57,5 +63,21 @@ class AnamnesisService {
   /// Delete an anamnesis record.
   Future<void> delete(String id) async {
     await _apiClient.delete(ApiEndpoints.anamnesisById(id));
+  }
+
+  /// Request a single-use ElevenLabs transcription token from the backend.
+  /// The token expires after 15 minutes and is consumed on first WebSocket connection.
+  /// Throws if ElevenLabs is not configured on the server (503).
+  Future<String> getTranscriptionToken() async {
+    final response = await _apiClient.post(
+      ApiEndpoints.transcriptionToken,
+      body: {},
+    );
+    final data = response as Map<String, dynamic>?;
+    final token = data?['token'];
+    if (token is! String || token.isEmpty) {
+      throw Exception('Invalid token response from server');
+    }
+    return token;
   }
 }

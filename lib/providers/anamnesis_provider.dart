@@ -34,6 +34,7 @@ class AnamnesisProvider extends ChangeNotifier {
   Timer? _durationTimer;
   String? _currentPatientId;
   bool _isLoadingHistory = false;
+  String _transcriptionBackend = 'onDevice';
 
   AnamnesisProvider({
     AnamnesisChannel? channel,
@@ -51,9 +52,20 @@ class AnamnesisProvider extends ChangeNotifier {
   bool get isRecording => _state == AnamnesisSessionState.recording;
   bool get isProcessing => _state == AnamnesisSessionState.structuring;
   bool get hasResult => _state == AnamnesisSessionState.reviewing;
-  List<AnamnesisModel> get savedAnamneses => _savedAnamneses;
+  List<AnamnesisModel> get savedAnamneses => List.unmodifiable(_savedAnamneses);
   Duration get recordingDuration => _recordingDuration;
   bool get isLoadingHistory => _isLoadingHistory;
+  String get transcriptionBackend => _transcriptionBackend;
+  bool get isUsingCloud => _transcriptionBackend == 'elevenLabs';
+
+  /// Switch the active transcription backend.
+  /// Token is fetched per-session from the server, not stored client-side.
+  Future<void> setTranscriptionBackend(String backend) async {
+    _transcriptionBackend = backend;
+    await _channel.setTranscriptionBackend(backend);
+    // Re-check availability since backend change affects it
+    await checkAvailability();
+  }
 
   /// Check if the feature is available on this device.
   Future<void> checkAvailability() async {
@@ -74,6 +86,28 @@ class AnamnesisProvider extends ChangeNotifier {
     _currentPatientId = patientId;
     notifyListeners();
 
+    // If using ElevenLabs, fetch a fresh single-use token from the server
+    if (_transcriptionBackend == 'elevenLabs') {
+      if (_anamnesisService == null) {
+        _state = AnamnesisSessionState.error;
+        _errorMessage =
+            'Cloud transcription is not available. Please switch to on-device.';
+        notifyListeners();
+        return;
+      }
+      try {
+        final token = await _anamnesisService.getTranscriptionToken();
+        await _channel.setTranscriptionBackend('elevenLabs', token: token);
+      } catch (e) {
+        _state = AnamnesisSessionState.error;
+        _errorMessage =
+            'Cloud transcription is not available. Please try again or switch to on-device.';
+        debugPrint('Failed to fetch transcription token: $e');
+        notifyListeners();
+        return;
+      }
+    }
+
     // Request microphone permission
     final granted = await _channel.requestMicrophonePermission();
     if (!granted) {
@@ -91,12 +125,21 @@ class AnamnesisProvider extends ChangeNotifier {
       // Listen to live transcript updates
       _transcriptSubscription = _channel.transcriptStream.listen(
         (update) {
+          if (update.isError) {
+            // Error message from native layer (e.g., WebSocket auth/quota error)
+            _state = AnamnesisSessionState.error;
+            _errorMessage = update.text;
+            _durationTimer?.cancel();
+            notifyListeners();
+            return;
+          }
           _liveTranscript = update.text;
           notifyListeners();
         },
         onError: (error) {
           _state = AnamnesisSessionState.error;
-          _errorMessage = 'Transcription error: $error';
+          _errorMessage = 'A transcription error occurred. Please try again.';
+          debugPrint('Transcription stream error: $error');
           notifyListeners();
         },
       );
@@ -110,7 +153,8 @@ class AnamnesisProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _state = AnamnesisSessionState.error;
-      _errorMessage = 'Failed to start recording: $e';
+      _errorMessage = 'Failed to start recording. Please try again.';
+      debugPrint('Failed to start transcription: $e');
       notifyListeners();
     }
   }
@@ -131,7 +175,8 @@ class AnamnesisProvider extends ChangeNotifier {
       await _structureTranscript();
     } catch (e) {
       _state = AnamnesisSessionState.error;
-      _errorMessage = e.toString();
+      _errorMessage = 'Failed to finalize the transcript. Please try again.';
+      debugPrint('Stop transcription error: $e');
       notifyListeners();
     }
   }
@@ -153,7 +198,8 @@ class AnamnesisProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _state = AnamnesisSessionState.error;
-      _errorMessage = 'Failed to structure anamnesis: $e';
+      _errorMessage = 'Failed to structure the anamnesis. Please try again.';
+      debugPrint('Structuring error: $e');
       notifyListeners();
     }
   }
@@ -178,15 +224,16 @@ class AnamnesisProvider extends ChangeNotifier {
     if (_anamnesisService != null) {
       try {
         final saved = await _anamnesisService.create(toSave);
-        _savedAnamneses.insert(0, saved);
+        _savedAnamneses = [saved, ..._savedAnamneses];
       } catch (e) {
         _state = AnamnesisSessionState.error;
-        _errorMessage = 'Failed to save anamnesis: $e';
+        _errorMessage = 'Failed to save the anamnesis. Please try again.';
+        debugPrint('Save anamnesis error: $e');
         notifyListeners();
         return;
       }
     } else {
-      _savedAnamneses.insert(0, toSave);
+      _savedAnamneses = [toSave, ..._savedAnamneses];
     }
 
     _state = AnamnesisSessionState.saved;
@@ -204,7 +251,8 @@ class AnamnesisProvider extends ChangeNotifier {
       final response = await _anamnesisService.getForPatient(patientId);
       _savedAnamneses = response.data;
     } catch (e) {
-      _errorMessage = 'Failed to load anamnesis history: $e';
+      _errorMessage = 'Failed to load anamnesis history.';
+      debugPrint('Load anamneses error: $e');
     }
 
     _isLoadingHistory = false;
@@ -217,10 +265,11 @@ class AnamnesisProvider extends ChangeNotifier {
 
     try {
       await _anamnesisService.delete(id);
-      _savedAnamneses.removeWhere((a) => a.id == id);
+      _savedAnamneses = _savedAnamneses.where((a) => a.id != id).toList();
       notifyListeners();
     } catch (e) {
-      _errorMessage = 'Failed to delete anamnesis: $e';
+      _errorMessage = 'Failed to delete the anamnesis.';
+      debugPrint('Delete anamnesis error: $e');
       notifyListeners();
     }
   }

@@ -92,6 +92,7 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
     final availability = provider.availability;
     final isAvailable = availability?.isFullyAvailable ?? false;
     final hasPatient = widget.patientId != null;
+    final isCloud = provider.isUsingCloud;
 
     return Column(
       children: [
@@ -99,11 +100,16 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
           context,
           icon: Icons.record_voice_over_outlined,
           title: 'Record Patient Consultation',
-          description:
-              'Start recording to transcribe the consultation in real-time. '
-              'The transcript will be automatically structured into a clinical '
-              'anamnesis using on-device AI. No data leaves this device.',
+          description: isCloud
+              ? 'Start recording to transcribe the consultation in real-time. '
+                  'Audio is sent to ElevenLabs servers for transcription. '
+                  'Structuring into a clinical anamnesis uses on-device AI.'
+              : 'Start recording to transcribe the consultation in real-time. '
+                  'The transcript will be automatically structured into a clinical '
+                  'anamnesis using on-device AI. No data leaves this device.',
         ),
+        const SizedBox(height: 24),
+        _buildBackendSelector(context, provider),
         const SizedBox(height: 24),
         if (availability != null && !isAvailable) ...[
           _buildAvailabilityWarning(context, availability),
@@ -163,6 +169,62 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
     return _buildWarningCard(context, issues.join('\n'));
   }
 
+  // -- Backend Selector --
+
+  Widget _buildBackendSelector(
+    BuildContext context,
+    AnamnesisProvider provider,
+  ) {
+    final currentBackend = provider.transcriptionBackend;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Transcription Engine',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontSize: 16,
+                ),
+          ),
+          const SizedBox(height: 16),
+
+          // On-Device option
+          _BackendRadioTile(
+            title: 'On-Device (Apple Speech)',
+            subtitle: 'Private \u00b7 No data leaves device',
+            icon: Icons.phone_iphone,
+            isSelected: currentBackend == 'onDevice',
+            onTap: () => provider.setTranscriptionBackend('onDevice'),
+          ),
+          const SizedBox(height: 8),
+
+          // Cloud option
+          _BackendRadioTile(
+            title: 'Cloud (ElevenLabs)',
+            subtitle: 'Higher accuracy \u00b7 99+ languages',
+            icon: Icons.cloud_outlined,
+            isSelected: currentBackend == 'elevenLabs',
+            onTap: () => provider.setTranscriptionBackend('elevenLabs'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // -- Requesting State --
 
   Widget _buildRequestingState(BuildContext context) {
@@ -185,6 +247,7 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
     final seconds = provider.recordingDuration.inSeconds % 60;
     final durationText =
         '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    final isCloud = provider.isUsingCloud;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -217,7 +280,13 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
                       fontWeight: FontWeight.w500,
                     ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 8),
+              Icon(
+                isCloud ? Icons.cloud_outlined : Icons.phone_iphone,
+                size: 16,
+                color: MystasisTheme.errorRed.withValues(alpha: 0.6),
+              ),
+              const SizedBox(width: 12),
               Text(
                 durationText,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -402,24 +471,29 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
         const SizedBox(height: 16),
 
         // Raw transcript toggle
-        GestureDetector(
+        InkWell(
           onTap: () => setState(() => _showRawTranscript = !_showRawTranscript),
-          child: Row(
-            children: [
-              Icon(
-                _showRawTranscript
-                    ? Icons.expand_less
-                    : Icons.expand_more,
-                color: MystasisTheme.neutralGrey,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Raw Transcript',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: MystasisTheme.neutralGrey,
-                    ),
-              ),
-            ],
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _showRawTranscript
+                      ? Icons.expand_less
+                      : Icons.expand_more,
+                  color: MystasisTheme.neutralGrey,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Raw Transcript',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: MystasisTheme.neutralGrey,
+                      ),
+                ),
+              ],
+            ),
           ),
         ),
         if (_showRawTranscript) ...[
@@ -872,6 +946,90 @@ class _AnamnesisSectionCard extends StatelessWidget {
                   ),
                 )),
         ],
+      ),
+    );
+  }
+}
+
+// -- Backend Radio Tile Widget --
+
+class _BackendRadioTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _BackendRadioTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected
+          ? MystasisTheme.deepBioTeal.withValues(alpha: 0.06)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected
+                  ? MystasisTheme.deepBioTeal.withValues(alpha: 0.3)
+                  : MystasisTheme.mistGrey,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? MystasisTheme.deepBioTeal
+                    : MystasisTheme.neutralGrey,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: isSelected
+                                ? MystasisTheme.deepGraphite
+                                : MystasisTheme.neutralGrey,
+                          ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: MystasisTheme.neutralGrey,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                isSelected ? Icons.radio_button_on : Icons.radio_button_off,
+                size: 20,
+                color: isSelected
+                    ? MystasisTheme.deepBioTeal
+                    : MystasisTheme.neutralGrey,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
