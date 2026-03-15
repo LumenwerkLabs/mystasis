@@ -108,6 +108,10 @@ services:
       # In production, passthrough should be false to prevent PHI leakage
       OPENMED_ALLOW_PASSTHROUGH: ${OPENMED_ALLOW_PASSTHROUGH:-false}
 
+      # ElevenLabs Speech-to-Text (optional, for cloud transcription)
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-sk_9ea11cbd6710fe67cde6a3f9adeb2b81bf19edf29feac003}
+      ELEVENLABS_API_URL: ${ELEVENLABS_API_URL:-https://api.elevenlabs.io}
+
       # Logging
       LOG_LEVEL: ${LOG_LEVEL:-log}
 
