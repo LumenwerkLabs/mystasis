@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Anamnesis Module** (`src/modules/anamnesis/`)
+  - CRUD operations for structured clinical anamnesis (patient interview) records
+  - **AnamnesisController** — 7 REST endpoints with role-based access control
+    - `POST /anamnesis` — Create anamnesis (CLINICIAN only, clinicianId from JWT)
+    - `POST /anamnesis/transcription-token` — Generate single-use ElevenLabs token (CLINICIAN only)
+    - `GET /anamnesis/patient/:patientId` — List anamneses for patient (paginated, date-filterable)
+    - `GET /anamnesis/:id` — Get single anamnesis (CLINICIAN or own PATIENT)
+    - `PATCH /anamnesis/:id` — Update structured fields (CLINICIAN only, patientId/rawTranscript immutable)
+    - `DELETE /anamnesis/:id` — Delete anamnesis (CLINICIAN only)
+  - **AnamnesisService** — Business logic with PHI-aware validation
+    - Patient existence validation before record creation
+    - ElevenLabs transcription token generation with sanitized error handling
+    - Audit logging with clinician ID for all token requests
+  - **DTOs** — Full validation with class-validator
+    - `CreateAnamnesisDto` — All structured fields (chief complaint, HPI, medical history, medications, allergies, family/social history, review of systems)
+    - `UpdateAnamnesisDto` — Partial updates (immutable fields excluded)
+    - `GetAnamnesisQueryDto` — Pagination + date range filtering
+  - **Prisma Schema** — `Anamnesis` model with UUID primary key, relations to User (patient + clinician), composite indexes on (patientId, recordedAt)
+  - **Access Control** — Patients can only view their own anamneses; clinicians have full CRUD
+
+- **ElevenLabs Transcription Token Integration**
+  - **Configuration** (`src/config/elevenlabs.config.ts`)
+    - `ELEVENLABS_API_KEY` — API key (optional; feature disabled if absent)
+    - `ELEVENLABS_API_URL` — Base URL (default: `https://api.elevenlabs.io`)
+    - HTTPS enforcement for non-localhost URLs
+    - Whitespace trimming on both values
+  - **Token Generation** — Server-side single-use token flow
+    - Backend holds real API key, generates temporary tokens via `POST /v1/single-use-token/realtime_scribe`
+    - Client receives short-lived token (15 min expiry, consumed on first WebSocket connection)
+    - API key never sent to client — only temporary tokens
+  - **Injection Token Pattern** (`anamnesis.constants.ts`)
+    - `HTTP_SERVICE_TOKEN` for HttpService dependency injection, matching LlmModule pattern
+    - Enables isolated unit testing with mocked HTTP service
+  - Registered `elevenlabsConfig` in global `ConfigModule`
+
+### Security
+
+- **Anamnesis Token Endpoint Hardening**
+  - Sanitized error messages — raw ElevenLabs HTTP errors never exposed to clients
+  - 10-second timeout on outbound ElevenLabs requests
+  - Response structure validation — rejects unexpected token formats
+  - Audit logging with clinician ID for all token generation requests
+  - 503 response when ElevenLabs is not configured (graceful feature gating)
+
 - **OpenMed PII De-identification Module** (Phase 1)
   - HIPAA-compliant de-identification of clinical notes before sending to LLM APIs
   - **Python Microservice** (`openmed-service/`)

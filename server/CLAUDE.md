@@ -76,6 +76,7 @@ server/
 │       ├── openmed/               # PII de-identification for clinical notes
 │       ├── analytics/             # Cohort-level insights for clinics
 │       ├── clinics/               # Clinic management and multi-tenancy
+│       ├── anamnesis/             # Clinical anamnesis CRUD + ElevenLabs transcription tokens
 │       └── health/                # Health checks (/health, /live, /ready)
 ├── openmed-service/               # Python microservice for OpenMed NER
 │   ├── main.py                    # FastAPI application
@@ -117,6 +118,7 @@ modules/[feature]/
 | `BiomarkerValue` | Timeseries entry: user, biomarker type, timestamp, value, unit, source, metadata |
 | `Alert` | Generated from threshold violations: type, severity, status, value vs threshold |
 | `LLMSummary` | Generated text (clinician vs patient facing) plus structured flags |
+| `Anamnesis` | Structured clinical interview: chief complaint, HPI, medical history, medications, allergies, family/social history, review of systems, raw transcript |
 
 **User Roles (`UserRole` enum):**
 - `PATIENT` — sees simplified biomarker trends and behavior nudges
@@ -440,6 +442,143 @@ async generateSummary(biomarkers: BiomarkerValue[], role: UserRole): Promise<LLM
 
 ---
 
+## Anamnesis Module
+
+**Location:** `modules/anamnesis/`
+
+### Purpose
+
+Manages structured clinical anamnesis (patient interview) records. Clinicians record patient interviews via voice transcription (on-device or cloud), which are structured by on-device Foundation Models and persisted to the backend.
+
+### Architecture
+
+```
+modules/anamnesis/
+├── anamnesis.module.ts          # IoC container — imports AuthModule, HttpModule
+├── anamnesis.controller.ts      # 7 endpoints (CRUD + transcription token)
+├── anamnesis.service.ts         # Business logic + ElevenLabs token generation
+├── anamnesis.constants.ts       # HTTP_SERVICE_TOKEN injection token
+└── dto/
+    ├── create-anamnesis.dto.ts  # Full anamnesis creation (all structured fields)
+    ├── update-anamnesis.dto.ts  # Partial update (patientId, rawTranscript immutable)
+    └── get-anamneses-query.dto.ts  # Pagination + date range filters
+```
+
+### Endpoints
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| `POST` | `/anamnesis` | Create anamnesis (clinicianId from JWT) | CLINICIAN |
+| `POST` | `/anamnesis/transcription-token` | Generate single-use ElevenLabs token | CLINICIAN |
+| `GET` | `/anamnesis/patient/:patientId` | List anamneses for patient (paginated) | CLINICIAN, own PATIENT |
+| `GET` | `/anamnesis/:id` | Get single anamnesis | CLINICIAN, own PATIENT |
+| `PATCH` | `/anamnesis/:id` | Update structured fields | CLINICIAN |
+| `DELETE` | `/anamnesis/:id` | Delete anamnesis | CLINICIAN |
+
+**Route ordering note:** The `POST /anamnesis/transcription-token` route is defined **before** `GET /anamnesis/:id` to prevent NestJS from treating `transcription-token` as an `:id` parameter.
+
+### Data Model (Prisma)
+
+```prisma
+model Anamnesis {
+  id                      String   @id @default(uuid())
+  patientId               String
+  clinicianId             String
+  rawTranscript           String
+  chiefComplaint          String
+  historyOfPresentIllness String
+  pastMedicalHistory      String[]
+  currentMedications      String[]
+  allergies               String[]
+  familyHistory           String[]
+  reviewOfSystems         String[]
+  socialHistory           String[]
+  isReviewed              Boolean  @default(false)
+  recordedAt              DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  patient   User @relation("PatientAnamneses", ...)
+  clinician User @relation("ClinicianAnamneses", ...)
+
+  @@index([patientId])
+  @@index([clinicianId])
+  @@index([recordedAt])
+  @@index([patientId, recordedAt])
+}
+```
+
+### Immutability Rules
+
+- `patientId` and `rawTranscript` cannot be modified after creation (excluded from `UpdateAnamnesisDto`)
+- `clinicianId` is set from the JWT token on creation, never from the request body
+
+### Dependency Injection Pattern
+
+The module uses a custom injection token for `HttpService`, matching the pattern established in `LlmModule`:
+
+```typescript
+// anamnesis.constants.ts
+export const HTTP_SERVICE_TOKEN = 'AnamnesisHttpService';
+
+// anamnesis.module.ts
+providers: [
+  AnamnesisService,
+  { provide: HTTP_SERVICE_TOKEN, useExisting: HttpService },
+],
+
+// anamnesis.service.ts
+constructor(
+  @Inject(HTTP_SERVICE_TOKEN) private readonly httpService: { post: (...args: any[]) => any },
+) {}
+```
+
+This allows mocking the HTTP service in tests without affecting other modules.
+
+---
+
+## ElevenLabs Transcription Token
+
+**Location:** `config/elevenlabs.config.ts` + `modules/anamnesis/anamnesis.service.ts`
+
+### Security Model
+
+The ElevenLabs API key **never leaves the server**. The backend generates single-use temporary tokens that the client uses for direct WebSocket connections:
+
+```
+macOS client (authenticated)
+    → POST /anamnesis/transcription-token (JWT auth)
+    → NestJS backend
+        → POST https://api.elevenlabs.io/v1/single-use-token/realtime_scribe
+           (xi-api-key header with real API key)
+        ← { "token": "eyJ..." }
+    ← { "token": "eyJ..." }
+    → Client opens WebSocket: wss://api.elevenlabs.io/...?token=eyJ...
+```
+
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ELEVENLABS_API_KEY` | API key for ElevenLabs STT | Empty (feature disabled) |
+| `ELEVENLABS_API_URL` | Base URL for ElevenLabs API | `https://api.elevenlabs.io` |
+
+- The key is **optional** — if not set, the endpoint returns 503 and only on-device transcription is available
+- HTTPS is enforced for non-localhost URLs
+- Whitespace is trimmed from both values
+
+### Error Handling
+
+| Scenario | HTTP Status | User-Facing Message |
+|----------|-------------|---------------------|
+| No API key configured | 503 | "Cloud transcription is not available." |
+| ElevenLabs rejects request | 500 | "Failed to generate transcription token." |
+| Unexpected response structure | 500 | "Failed to generate transcription token." |
+
+All errors are logged with `Logger` including clinician ID for audit trail. Raw error details are never exposed to the client.
+
+---
+
 ## Health Checks
 
 **Endpoints:**
@@ -534,6 +673,17 @@ Users are upserted on email. Seed biomarkers (identified by `source: 'seed_data'
 5. **Always de-identify clinical notes** using `OpenMedService.deidentify()` before including in prompts
 6. Use `buildUserPromptWithClinicalNotes()` for prompts that include clinical text
 
+### When Working with Anamnesis Module
+
+1. Anamnesis records contain PHI — follow the same audit logging patterns as other PHI-handling modules
+2. `patientId` and `rawTranscript` are immutable after creation — never add these to `UpdateAnamnesisDto`
+3. `clinicianId` is always set from the JWT token (`user.sub`), never from the request body
+4. The transcription-token endpoint must remain **before** the `:id` route in the controller to avoid route conflicts
+5. ElevenLabs integration is optional — guard all token generation with `if (!apiKey)` checks
+6. Error messages from `generateTranscriptionToken()` must be sanitized — never expose raw HTTP errors or API key details
+7. The `HTTP_SERVICE_TOKEN` injection pattern matches `LlmModule` — use the same pattern when adding external HTTP dependencies
+8. When adding new structured fields, update both `CreateAnamnesisDto` and `UpdateAnamnesisDto` (unless the field should be immutable)
+
 ### When Working with OpenMed Module
 
 1. Never set `OPENMED_ALLOW_PASSTHROUGH=true` in production
@@ -554,3 +704,5 @@ Users are upserted on email. Seed biomarkers (identified by `source: 'seed_data'
 - [ ] Code follows existing module patterns
 - [ ] Clinical notes de-identified before LLM calls (if applicable)
 - [ ] HIPAA audit logging includes userId for PHI operations
+- [ ] Error messages sanitized — no raw exceptions exposed to clients
+- [ ] External HTTP services use injection token pattern for testability

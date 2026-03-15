@@ -275,7 +275,7 @@ export class AnamnesisService {
         ),
       );
 
-      const token = response?.data?.token;
+      const token = (response as any)?.data?.token;
       if (!token || typeof token !== 'string') {
         this.logger.error(
           'ElevenLabs returned an unexpected response structure',

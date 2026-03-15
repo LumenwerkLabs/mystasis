@@ -49,6 +49,7 @@ lib/
 │   │   ├── api_client.dart        # HTTP client for backend communication
 │   │   ├── auth_service.dart      # Token management
 │   │   ├── anamnesis_channel.dart # MethodChannel/EventChannel bridge to native macOS
+│   │   ├── anamnesis_service.dart  # Anamnesis CRUD + transcription token (backend API)
 │   │   ├── health_data_service.dart # Biomarker CRUD (getBiomarkers, trends)
 │   │   ├── storage_service.dart   # Local persistence
 │   │   └── users_service.dart     # User/patient list fetching
@@ -81,7 +82,7 @@ macos/Runner/
 ├── Anamnesis/                     # Native macOS anamnesis services (Swift)
 │   ├── TranscriptionService.swift           # Strategy protocol + data types
 │   ├── OnDeviceTranscriptionService.swift   # Apple Speech framework (SpeechAnalyzer)
-│   ├── ElevenLabsTranscriptionService.swift # Cloud transcription placeholder
+│   ├── ElevenLabsTranscriptionService.swift # Cloud transcription via ElevenLabs WebSocket
 │   ├── AnamnesisStructuringService.swift    # Foundation Models (@Generable)
 │   └── AnamnesisMethodChannel.swift         # Flutter MethodChannel/EventChannel bridge
 ├── AppDelegate.swift              # Registers AnamnesisMethodChannel
@@ -262,6 +263,7 @@ class DashboardScreen extends StatelessWidget {
 | `HealthDataService` | `health_data_service.dart` | `getBiomarkers`, `getLatestBiomarker`, `getTrend` |
 | `UsersService` | `users_service.dart` | `getUsers`, `getUser` |
 | `LlmService` | `llm_service.dart` | `generateSummary`, `generateNudge` |
+| `AnamnesisService` | `anamnesis_service.dart` | Anamnesis CRUD + transcription token generation (backend API) |
 | `AnamnesisChannel` | `anamnesis_channel.dart` | Native bridge via MethodChannel/EventChannel (macOS only, see below) |
 
 ### Pattern
@@ -293,7 +295,8 @@ class ApiClient {
 The anamnesis feature uses a **Flutter MethodChannel / EventChannel** to bridge Dart code to native Swift services running on macOS. This is required because Apple's Speech framework and Foundation Models framework are native-only APIs.
 
 **Requires:** macOS 26+ (Apple Intelligence)
-**Processing:** Fully on-device — no patient data leaves the Mac
+**Structuring:** Fully on-device — Foundation Models never sends patient data off-device
+**Transcription:** On-device (Apple Speech) or cloud (ElevenLabs) — configurable per session
 **Audience:** Clinician-only (accessible from the clinician dashboard sidebar)
 
 ### Architecture
@@ -308,10 +311,21 @@ AnamnesisProvider
 AnamnesisChannel ──MethodChannel──→  AnamnesisMethodChannel
                   EventChannel──→        ↕
                                     TranscriptionService (protocol)
-                                        ├─ OnDeviceTranscriptionService (Speech)
-                                        └─ ElevenLabsTranscriptionService (placeholder)
+                                        ├─ OnDeviceTranscriptionService (Apple Speech)
+                                        └─ ElevenLabsTranscriptionService (WebSocket STT)
                                     AnamnesisStructuringService (FoundationModels)
+
+Cloud transcription token flow (ElevenLabs):
+    Flutter → POST /anamnesis/transcription-token (JWT auth) → NestJS backend
+    NestJS → POST elevenlabs.io/v1/single-use-token/realtime_scribe (xi-api-key)
+    NestJS ← { token: "eyJ..." }
+    Flutter ← { token: "eyJ..." }
+    Flutter → passes token to native via MethodChannel
+    Native → opens WebSocket: wss://api.elevenlabs.io/...?token=eyJ...
+    Audio flows directly from mic to ElevenLabs (low latency)
 ```
+
+**Security model:** The real ElevenLabs API key never touches the client. The NestJS backend holds the key and issues single-use temporary tokens (15 min expiry) per recording session.
 
 ### MethodChannel Contract
 
@@ -320,12 +334,16 @@ AnamnesisChannel ──MethodChannel──→  AnamnesisMethodChannel
 
 | Method | Args | Returns |
 |--------|------|---------|
-| `checkAvailability` | — | `{speechAvailable: bool, foundationModelsAvailable: bool}` |
+| `checkAvailability` | — | `{speechAvailable: bool, foundationModelsAvailable: bool, elevenLabsConfigured: bool}` |
 | `requestMicrophonePermission` | — | `bool` |
 | `startTranscription` | `{locale: String}` | `void` (stream via EventChannel) |
 | `stopTranscription` | — | `String` (final transcript) |
 | `structureAnamnesis` | `{transcript: String}` | `Map<String, dynamic>` (structured fields) |
-| `setTranscriptionBackend` | `{backend: String}` | `void` |
+| `setTranscriptionBackend` | `{backend: String, token?: String}` | `void` |
+| `getTranscriptionBackend` | — | `String` (`"onDevice"` or `"elevenLabs"`) |
+
+**EventChannel payload:** `{text: String, isFinal: bool, confidence: double, isError: bool}`
+When `isError` is `true`, `text` contains a user-friendly error message (e.g., quota exceeded, session expired) rather than transcript content.
 
 ### Structured Output (Foundation Models `@Generable`)
 
@@ -346,8 +364,8 @@ The on-device LLM extracts these fields from the raw transcript:
 
 The `TranscriptionService` protocol allows swapping transcription backends:
 
-- **`OnDeviceTranscriptionService`** — Ships first, uses `SpeechAnalyzer` + `SpeechTranscriber` with `AVAudioEngine` mic capture
-- **`ElevenLabsTranscriptionService`** — Placeholder (`isAvailable = false`), designed for future cloud-based transcription via WebSocket streaming
+- **`OnDeviceTranscriptionService`** — Uses `SpeechAnalyzer` + `SpeechTranscriber` with `AVAudioEngine` mic capture. Fully on-device, no data leaves the Mac.
+- **`ElevenLabsTranscriptionService`** — Cloud-based real-time STT via WebSocket. Uses `AVAudioEngine` mic → PCM 16kHz 16-bit mono → base64 → WebSocket → ElevenLabs `scribe_v2` model. Authenticates with server-issued single-use tokens (not raw API keys). Token is consumed after one session and cleared on stop.
 
 ### Chunking (Long Transcripts)
 
@@ -363,11 +381,14 @@ For consultations exceeding ~3000 tokens, a two-pass approach is used:
 ### When Modifying the Anamnesis Feature
 
 1. Native Swift files live in `macos/Runner/Anamnesis/` — modify via Xcode
-2. The Dart side lives in `lib/core/services/anamnesis_channel.dart`, `lib/core/models/anamnesis_model.dart`, `lib/providers/anamnesis_provider.dart`, and `lib/screens/dashboard/screens/anamnesis_screen.dart`
+2. The Dart side lives in `lib/core/services/anamnesis_channel.dart`, `lib/core/services/anamnesis_service.dart`, `lib/core/models/anamnesis_model.dart`, `lib/providers/anamnesis_provider.dart`, and `lib/screens/dashboard/screens/anamnesis_screen.dart`
 3. If adding new MethodChannel methods, update both `AnamnesisMethodChannel.swift` and `anamnesis_channel.dart`
 4. All `@available(macOS 26.0, *)` annotations are required — these APIs do not exist on older macOS
 5. Use `AnyObject?` pattern for stored properties that reference `@available`-gated types (see `AppDelegate.swift`)
 6. Medical disclaimer must appear on the review screen for structured output
+7. **Error messages in the provider must never expose raw exception details** (`$e`) to the UI — use `debugPrint` for developer logging and static user-friendly strings for `_errorMessage`
+8. **ElevenLabs token flow:** Tokens are fetched fresh before each recording session via `AnamnesisService.getTranscriptionToken()` → `POST /anamnesis/transcription-token`. The token is single-use (consumed on WebSocket connect) and expires after 15 minutes. The real API key lives only on the NestJS server.
+9. **Adding a new transcription backend:** Implement the `TranscriptionService` protocol in Swift, add a new case in `AnamnesisMethodChannel.handleMethodCall` under `setTranscriptionBackend`, and update the Flutter backend selector UI
 
 ---
 
