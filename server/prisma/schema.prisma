@@ -24,11 +24,13 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clinic          Clinic?          @relation(fields: [clinicId], references: [id])
-  biomarkerValues BiomarkerValue[]
-  alerts          Alert[]
-  summaries       LLMSummary[]
-  refreshTokens   RefreshToken[]
+  clinic               Clinic?          @relation(fields: [clinicId], references: [id])
+  biomarkerValues      BiomarkerValue[]
+  alerts               Alert[]
+  summaries            LLMSummary[]
+  refreshTokens        RefreshToken[]
+  patientAnamneses     Anamnesis[]      @relation("PatientAnamneses")
+  clinicianAnamneses   Anamnesis[]      @relation("ClinicianAnamneses")
 
   @@index([email])
   @@index([role])
@@ -287,6 +289,34 @@ enum SummaryType {
   RISK_ASSESSMENT
   WELLNESS_NUDGE
   CLINICIAN_REPORT
+}
+
+// Structured clinical anamnesis from voice-transcribed consultations
+model Anamnesis {
+  id                      String   @id @default(uuid())
+  patientId               String
+  clinicianId             String
+  rawTranscript           String
+  chiefComplaint          String
+  historyOfPresentIllness String
+  pastMedicalHistory      String[]
+  currentMedications      String[]
+  allergies               String[]
+  familyHistory           String[]
+  reviewOfSystems         String[]
+  socialHistory           String[]
+  isReviewed              Boolean  @default(false)
+  recordedAt              DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  patient   User @relation("PatientAnamneses", fields: [patientId], references: [id], onDelete: Cascade)
+  clinician User @relation("ClinicianAnamneses", fields: [clinicianId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([clinicianId])
+  @@index([recordedAt])
+  @@index([patientId, recordedAt])
 }
 
 // Clinic model for multi-tenancy

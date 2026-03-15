@@ -13,6 +13,7 @@ import { ClinicsModule } from './modules/clinics/clinics.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { OpenMedModule } from './modules/openmed/openmed.module';
+import { AnamnesisModule } from './modules/anamnesis/anamnesis.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { OpenMedModule } from './modules/openmed/openmed.module';
     AnalyticsModule,
     LlmModule,
     OpenMedModule,
+    AnamnesisModule,
   ],
   controllers: [],
   providers: [

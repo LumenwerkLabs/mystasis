@@ -92,6 +92,11 @@ class ClinicianSidebar extends StatelessWidget {
         label: 'Reports',
       ),
       _NavItem(
+        icon: Icons.mic_outlined,
+        activeIcon: Icons.mic,
+        label: 'Anamnesis',
+      ),
+      _NavItem(
         icon: Icons.settings_outlined,
         activeIcon: Icons.settings,
         label: 'Settings',

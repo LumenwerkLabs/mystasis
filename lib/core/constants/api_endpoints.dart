@@ -48,6 +48,12 @@ class ApiEndpoints {
   static String llmSummary(String userId) => '/llm/summary/$userId';
   static String llmNudge(String userId) => '/llm/nudge/$userId';
 
+  // Anamnesis endpoints
+  static const String anamnesis = '/anamnesis';
+  static String anamnesisForPatient(String patientId) =>
+      '/anamnesis/patient/$patientId';
+  static String anamnesisById(String id) => '/anamnesis/$id';
+
   // User endpoints
   static const String users = '/users';
 }

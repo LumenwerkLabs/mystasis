@@ -27,6 +27,11 @@
 		33CC10F32044A3C60003C045 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F22044A3C60003C045 /* Assets.xcassets */; };
 		33CC10F62044A3C60003C045 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 33CC10F42044A3C60003C045 /* MainMenu.xib */; };
 		33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC11122044BFA00003C045 /* MainFlutterWindow.swift */; };
+		38D12E272F66E16A00985C83 /* AnamnesisMethodChannel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D12E212F66E0F500985C83 /* AnamnesisMethodChannel.swift */; };
+		38D12E282F66E16A00985C83 /* AnamnesisStructuringService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D12E222F66E0F500985C83 /* AnamnesisStructuringService.swift */; };
+		38D12E292F66E16A00985C83 /* ElevenLabsTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D12E232F66E0F500985C83 /* ElevenLabsTranscriptionService.swift */; };
+		38D12E2A2F66E16A00985C83 /* OnDeviceTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D12E242F66E0F500985C83 /* OnDeviceTranscriptionService.swift */; };
+		38D12E2B2F66E16A00985C83 /* TranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38D12E252F66E0F500985C83 /* TranscriptionService.swift */; };
 		938376B3A1663A499C61A4B8 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECDC598B1028F1C153377AAF /* Pods_RunnerTests.framework */; };
 		CD161E99264081EBD3336737 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 02BF363DFE062F33D8CD0A33 /* GoogleService-Info.plist */; };
 		FCF85E6559680033558A84B0 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E51545476B92AC14514B5186 /* Pods_Runner.framework */; };
@@ -81,6 +86,11 @@
 		33E51913231747F40026EE4D /* DebugProfile.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DebugProfile.entitlements; sourceTree = "<group>"; };
 		33E51914231749380026EE4D /* Release.entitlements */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.entitlements; path = Release.entitlements; sourceTree = "<group>"; };
 		33E5194F232828860026EE4D /* AppInfo.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppInfo.xcconfig; sourceTree = "<group>"; };
+		38D12E212F66E0F500985C83 /* AnamnesisMethodChannel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnamnesisMethodChannel.swift; sourceTree = "<group>"; };
+		38D12E222F66E0F500985C83 /* AnamnesisStructuringService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnamnesisStructuringService.swift; sourceTree = "<group>"; };
+		38D12E232F66E0F500985C83 /* ElevenLabsTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ElevenLabsTranscriptionService.swift; sourceTree = "<group>"; };
+		38D12E242F66E0F500985C83 /* OnDeviceTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceTranscriptionService.swift; sourceTree = "<group>"; };
+		38D12E252F66E0F500985C83 /* TranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptionService.swift; sourceTree = "<group>"; };
 		4AE53ED299BDBF5B00966DCD /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		7AFA3C8E1D35360C0083082E /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 		81C455B7292613B35A985B2B /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
@@ -122,7 +132,6 @@
 				02CB7DF570FAC36D4B7B516A /* Pods-RunnerTests.release.xcconfig */,
 				81C455B7292613B35A985B2B /* Pods-RunnerTests.profile.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -198,8 +207,21 @@
 				33E51914231749380026EE4D /* Release.entitlements */,
 				33CC11242044D66E0003C045 /* Resources */,
 				33BA886A226E78AF003329D5 /* Configs */,
+				38D12E262F66E0F500985C83 /* Anamnesis */,
 			);
 			path = Runner;
+			sourceTree = "<group>";
+		};
+		38D12E262F66E0F500985C83 /* Anamnesis */ = {
+			isa = PBXGroup;
+			children = (
+				38D12E212F66E0F500985C83 /* AnamnesisMethodChannel.swift */,
+				38D12E222F66E0F500985C83 /* AnamnesisStructuringService.swift */,
+				38D12E232F66E0F500985C83 /* ElevenLabsTranscriptionService.swift */,
+				38D12E242F66E0F500985C83 /* OnDeviceTranscriptionService.swift */,
+				38D12E252F66E0F500985C83 /* TranscriptionService.swift */,
+			);
+			path = Anamnesis;
 			sourceTree = "<group>";
 		};
 		D73912EC22F37F3D000D13A0 /* Frameworks */ = {
@@ -441,6 +463,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				38D12E272F66E16A00985C83 /* AnamnesisMethodChannel.swift in Sources */,
+				38D12E282F66E16A00985C83 /* AnamnesisStructuringService.swift in Sources */,
+				38D12E292F66E16A00985C83 /* ElevenLabsTranscriptionService.swift in Sources */,
+				38D12E2A2F66E16A00985C83 /* OnDeviceTranscriptionService.swift in Sources */,
+				38D12E2B2F66E16A00985C83 /* TranscriptionService.swift in Sources */,
 				33CC11132044BFA00003C045 /* MainFlutterWindow.swift in Sources */,
 				33CC10F12044A3C60003C045 /* AppDelegate.swift in Sources */,
 				335BBD1B22A9A15E00E9071D /* GeneratedPluginRegistrant.swift in Sources */,
@@ -576,8 +603,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 46SMGAPSDK;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -708,8 +748,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/DebugProfile.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 46SMGAPSDK;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -728,8 +781,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = Runner/Release.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = 46SMGAPSDK;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				INFOPLIST_FILE = Runner/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

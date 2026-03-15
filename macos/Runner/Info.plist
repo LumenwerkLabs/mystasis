@@ -28,5 +28,11 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Mystasis needs network access to communicate with the API server.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Mystasis needs microphone access to record patient consultations for transcription.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Mystasis uses speech recognition to transcribe patient consultations during anamnesis recording.</string>
 </dict>
 </plist>

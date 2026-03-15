@@ -9,11 +9,13 @@ import 'package:mystasis/core/services/health_data_service.dart';
 import 'package:mystasis/core/services/llm_service.dart';
 import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/core/services/users_service.dart';
+import 'package:mystasis/core/services/anamnesis_service.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/patients_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
 import 'package:mystasis/providers/health_sync_provider.dart';
+import 'package:mystasis/providers/anamnesis_provider.dart';
 import 'package:mystasis/screens/auth/login_screen.dart';
 import 'package:mystasis/screens/auth/signup_screen.dart';
 import 'package:mystasis/screens/auth/forgot_password_screen.dart';
@@ -39,6 +41,7 @@ void main() async {
   final healthDataService = HealthDataService(apiClient: apiClient);
   final usersService = UsersService(apiClient: apiClient);
   final llmService = LlmService(apiClient: apiClient);
+  final anamnesisService = AnamnesisService(apiClient: apiClient);
 
   // Wire session expiry: when token refresh fails, force logout.
   // AuthService.forceLogout() emits null auth state → AuthWrapper shows LoginScreen.
@@ -52,6 +55,7 @@ void main() async {
     healthDataService: healthDataService,
     usersService: usersService,
     llmService: llmService,
+    anamnesisService: anamnesisService,
   ));
 }
 
@@ -61,6 +65,7 @@ class MystasisApp extends StatelessWidget {
   final HealthDataService healthDataService;
   final UsersService usersService;
   final LlmService llmService;
+  final AnamnesisService anamnesisService;
 
   const MystasisApp({
     super.key,
@@ -69,6 +74,7 @@ class MystasisApp extends StatelessWidget {
     required this.healthDataService,
     required this.usersService,
     required this.llmService,
+    required this.anamnesisService,
   });
 
   @override
@@ -89,6 +95,9 @@ class MystasisApp extends StatelessWidget {
                   healthDataService: healthDataService,
                   storageService: storageService,
                 )),
+        ChangeNotifierProvider(
+            create: (_) =>
+                AnamnesisProvider(anamnesisService: anamnesisService)),
       ],
       child: MaterialApp(
         title: 'Mystasis',
@@ -197,13 +206,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
       builder: (context, auth, _) {
         if (!auth.isAuthenticated) return const LoginScreen();
 
+        // Clinicians get the dashboard on web and desktop
+        if (auth.user!.isClinician) return const ClinicianDashboard();
+
         if (kIsWeb) {
-          // Web is clinician-only
-          if (auth.user!.isClinician) return const ClinicianDashboard();
           return const WebPatientNotSupportedScreen();
         }
 
-        // Mobile: all authenticated users
+        // Mobile: patient users
         return const MobileHomeScreen();
       },
     );

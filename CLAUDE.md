@@ -43,18 +43,25 @@ lib/
 │   │   └── api_endpoints.dart     # API URL constants + parameterized helpers
 │   ├── models/
 │   │   ├── biomarker_model.dart   # BiomarkerModel with reference ranges, status
+│   │   ├── anamnesis_model.dart   # AnamnesisModel — structured clinical anamnesis
 │   │   └── paginated_response.dart # Generic PaginatedResponse<T>
 │   ├── services/
 │   │   ├── api_client.dart        # HTTP client for backend communication
 │   │   ├── auth_service.dart      # Token management
+│   │   ├── anamnesis_channel.dart # MethodChannel/EventChannel bridge to native macOS
 │   │   ├── health_data_service.dart # Biomarker CRUD (getBiomarkers, trends)
 │   │   ├── storage_service.dart   # Local persistence
 │   │   └── users_service.dart     # User/patient list fetching
 │   ├── utils/                     # Shared utility functions
 │   └── widgets/                   # Reusable UI components
 ├── providers/
+│   ├── anamnesis_provider.dart    # AnamnesisProvider (recording + structuring state machine)
 │   ├── biomarkers_provider.dart   # BiomarkersProvider (ChangeNotifier)
 │   └── patients_provider.dart     # PatientsProvider (ChangeNotifier)
+├── screens/
+│   └── dashboard/
+│       └── screens/
+│           └── anamnesis_screen.dart # Anamnesis recording UI (clinician-only)
 ├── features/
 │   ├── auth/
 │   │   ├── screens/
@@ -69,6 +76,17 @@ lib/
 └── shared/
     ├── models/                    # Domain models shared across features
     └── extensions/                # Dart extensions
+
+macos/Runner/
+├── Anamnesis/                     # Native macOS anamnesis services (Swift)
+│   ├── TranscriptionService.swift           # Strategy protocol + data types
+│   ├── OnDeviceTranscriptionService.swift   # Apple Speech framework (SpeechAnalyzer)
+│   ├── ElevenLabsTranscriptionService.swift # Cloud transcription placeholder
+│   ├── AnamnesisStructuringService.swift    # Foundation Models (@Generable)
+│   └── AnamnesisMethodChannel.swift         # Flutter MethodChannel/EventChannel bridge
+├── AppDelegate.swift              # Registers AnamnesisMethodChannel
+├── DebugProfile.entitlements      # Includes audio-input entitlement
+└── Release.entitlements           # Includes audio-input entitlement
 ```
 
 ---
@@ -156,6 +174,9 @@ features/[feature]/
 | `AuthProvider` | `features/auth/` | Login state, token management |
 | `PatientsProvider` | `providers/patients_provider.dart` | Patient list, selected patient |
 | `BiomarkersProvider` | `providers/biomarkers_provider.dart` | Biomarker data, grouping by type |
+| `InsightsProvider` | `providers/insights_provider.dart` | LLM-generated health summaries |
+| `HealthSyncProvider` | `providers/health_sync_provider.dart` | Apple Health data sync |
+| `AnamnesisProvider` | `providers/anamnesis_provider.dart` | Anamnesis recording, transcription, structuring workflow (state machine: idle → recording → structuring → reviewing → saved) |
 
 ### Pattern
 
@@ -235,11 +256,13 @@ class DashboardScreen extends StatelessWidget {
 
 **Services:**
 
-| Service | File | Endpoints |
-|---------|------|-----------|
+| Service | File | Endpoints / Methods |
+|---------|------|---------------------|
 | `ApiClient` | `api_client.dart` | Base HTTP client (Dio) with auth headers |
 | `HealthDataService` | `health_data_service.dart` | `getBiomarkers`, `getLatestBiomarker`, `getTrend` |
 | `UsersService` | `users_service.dart` | `getUsers`, `getUser` |
+| `LlmService` | `llm_service.dart` | `generateSummary`, `generateNudge` |
+| `AnamnesisChannel` | `anamnesis_channel.dart` | Native bridge via MethodChannel/EventChannel (macOS only, see below) |
 
 ### Pattern
 
@@ -265,6 +288,89 @@ class ApiClient {
 
 ---
 
+## Native macOS Bridge (Anamnesis)
+
+The anamnesis feature uses a **Flutter MethodChannel / EventChannel** to bridge Dart code to native Swift services running on macOS. This is required because Apple's Speech framework and Foundation Models framework are native-only APIs.
+
+**Requires:** macOS 26+ (Apple Intelligence)
+**Processing:** Fully on-device — no patient data leaves the Mac
+**Audience:** Clinician-only (accessible from the clinician dashboard sidebar)
+
+### Architecture
+
+```
+Flutter (Dart)                       Native macOS (Swift)
+──────────────                       ────────────────────
+AnamnesisScreen
+    ↕ Consumer
+AnamnesisProvider
+    ↕
+AnamnesisChannel ──MethodChannel──→  AnamnesisMethodChannel
+                  EventChannel──→        ↕
+                                    TranscriptionService (protocol)
+                                        ├─ OnDeviceTranscriptionService (Speech)
+                                        └─ ElevenLabsTranscriptionService (placeholder)
+                                    AnamnesisStructuringService (FoundationModels)
+```
+
+### MethodChannel Contract
+
+**Channel:** `com.mystasis/anamnesis`
+**Event Channel:** `com.mystasis/anamnesis/transcriptStream`
+
+| Method | Args | Returns |
+|--------|------|---------|
+| `checkAvailability` | — | `{speechAvailable: bool, foundationModelsAvailable: bool}` |
+| `requestMicrophonePermission` | — | `bool` |
+| `startTranscription` | `{locale: String}` | `void` (stream via EventChannel) |
+| `stopTranscription` | — | `String` (final transcript) |
+| `structureAnamnesis` | `{transcript: String}` | `Map<String, dynamic>` (structured fields) |
+| `setTranscriptionBackend` | `{backend: String}` | `void` |
+
+### Structured Output (Foundation Models `@Generable`)
+
+The on-device LLM extracts these fields from the raw transcript:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `chiefComplaint` | `String` | Main reason for the visit |
+| `historyOfPresentIllness` | `String` | Symptoms, onset, duration, severity |
+| `pastMedicalHistory` | `[String]` | Past conditions, surgeries, hospitalizations |
+| `currentMedications` | `[String]` | Medications + dosages mentioned |
+| `allergies` | `[String]` | Drug/other allergies and reactions |
+| `familyHistory` | `[String]` | Family medical history |
+| `reviewOfSystems` | `[String]` | Symptoms by body system |
+| `socialHistory` | `[String]` | Lifestyle: smoking, alcohol, exercise, diet, occupation |
+
+### Strategy Pattern (Transcription Backend)
+
+The `TranscriptionService` protocol allows swapping transcription backends:
+
+- **`OnDeviceTranscriptionService`** — Ships first, uses `SpeechAnalyzer` + `SpeechTranscriber` with `AVAudioEngine` mic capture
+- **`ElevenLabsTranscriptionService`** — Placeholder (`isAvailable = false`), designed for future cloud-based transcription via WebSocket streaming
+
+### Chunking (Long Transcripts)
+
+For consultations exceeding ~3000 tokens, a two-pass approach is used:
+1. **Summarize** each chunk into bullet-point clinical notes (plain text)
+2. **Structure** the combined summaries into `StructuredAnamnesis` via guided generation
+
+### Permissions
+
+**Entitlements:** `com.apple.security.device.audio-input` (both Debug + Release)
+**Info.plist:** `NSMicrophoneUsageDescription`, `NSSpeechRecognitionUsageDescription`
+
+### When Modifying the Anamnesis Feature
+
+1. Native Swift files live in `macos/Runner/Anamnesis/` — modify via Xcode
+2. The Dart side lives in `lib/core/services/anamnesis_channel.dart`, `lib/core/models/anamnesis_model.dart`, `lib/providers/anamnesis_provider.dart`, and `lib/screens/dashboard/screens/anamnesis_screen.dart`
+3. If adding new MethodChannel methods, update both `AnamnesisMethodChannel.swift` and `anamnesis_channel.dart`
+4. All `@available(macOS 26.0, *)` annotations are required — these APIs do not exist on older macOS
+5. Use `AnyObject?` pattern for stored properties that reference `@available`-gated types (see `AppDelegate.swift`)
+6. Medical disclaimer must appear on the review screen for structured output
+
+---
+
 ## Domain Models
 
 **Locations:** `lib/core/models/` (core models) and `lib/shared/models/` (shared across features)
@@ -274,6 +380,7 @@ class ApiClient {
 | Model | File | Description |
 |-------|------|-------------|
 | `BiomarkerModel` | `core/models/biomarker_model.dart` | Biomarker with `fromJson`/`toJson`, `displayName`, `category`, `status`, reference ranges |
+| `AnamnesisModel` | `core/models/anamnesis_model.dart` | Structured clinical anamnesis with 8 sections (chief complaint, HPI, medications, allergies, etc.) + `fromStructuredOutput`/`fromJson`/`toJson`/`copyWith` |
 | `PaginatedResponse<T>` | `core/models/paginated_response.dart` | Generic wrapper matching backend pagination format (`data`, `total`, `page`, `limit`) |
 
 ### Pattern
@@ -309,7 +416,7 @@ class Biomarker with _$Biomarker {
 | Role | Access | UI Variant |
 |------|--------|------------|
 | `patient` | Own biomarkers, simplified insights, nudges | Mobile app |
-| `clinician` | All patients, detailed timelines, risk flags, reports | Web dashboard |
+| `clinician` | All patients, detailed timelines, risk flags, reports, anamnesis recording | Web/macOS dashboard |
 
 ### Handling Roles
 

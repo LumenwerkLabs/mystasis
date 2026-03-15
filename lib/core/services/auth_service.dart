@@ -200,12 +200,6 @@ class AuthService {
     } on AuthException {
       rethrow;
     } catch (e) {
-      // Log detailed error internally for debugging (in production, use proper logging)
-      assert(() {
-        // ignore: avoid_print
-        print('AuthService.signIn error: $e');
-        return true;
-      }());
       throw const AuthException(
         code: 'unknown-error',
         message: 'An unexpected error occurred. Please try again.',

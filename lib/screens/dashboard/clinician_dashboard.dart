@@ -11,7 +11,9 @@ import 'package:mystasis/screens/dashboard/screens/overview_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/biomarkers_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/wearables_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/reports_screen.dart';
+import 'package:mystasis/screens/dashboard/screens/anamnesis_screen.dart';
 import 'package:mystasis/screens/settings/settings_screen.dart';
+import 'package:mystasis/providers/anamnesis_provider.dart';
 
 class ClinicianDashboard extends StatefulWidget {
   const ClinicianDashboard({super.key});
@@ -50,6 +52,7 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
     // Reload biomarkers and clear insights for newly selected patient
     context.read<BiomarkersProvider>().reloadBiomarkers(patientId);
     context.read<InsightsProvider>().clearSummaries();
+    context.read<AnamnesisProvider>().clearForPatient();
   }
 
   @override
@@ -118,6 +121,7 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
       BiomarkersScreen(patientId: patientId),
       const WearablesScreen(),
       ReportsScreen(patientId: patientId),
+      AnamnesisScreen(patientId: patientId),
       const SettingsScreen(),
     ];
 

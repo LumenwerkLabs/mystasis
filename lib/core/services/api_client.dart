@@ -63,6 +63,8 @@ abstract class HttpClientWrapper {
       {Map<String, String>? headers, Map<String, dynamic>? body});
   Future<HttpResponse> put(Uri url,
       {Map<String, String>? headers, Map<String, dynamic>? body});
+  Future<HttpResponse> patch(Uri url,
+      {Map<String, String>? headers, Map<String, dynamic>? body});
   Future<HttpResponse> delete(Uri url, {Map<String, String>? headers});
 }
 
@@ -109,6 +111,20 @@ class DioHttpClientWrapper implements HttpClientWrapper {
   Future<HttpResponse> put(Uri url,
       {Map<String, String>? headers, Map<String, dynamic>? body}) async {
     final response = await _dio.putUri(
+      url,
+      data: body,
+      options: Options(headers: headers),
+    );
+    return HttpResponse(
+      statusCode: response.statusCode ?? 0,
+      body: response.data,
+    );
+  }
+
+  @override
+  Future<HttpResponse> patch(Uri url,
+      {Map<String, String>? headers, Map<String, dynamic>? body}) async {
+    final response = await _dio.patchUri(
       url,
       data: body,
       options: Options(headers: headers),
@@ -196,6 +212,15 @@ class ApiClient {
     return _executeWithRefresh(
       endpoint,
       (headers) => _httpClient.put(Uri.parse('$baseUrl$endpoint'),
+          headers: headers, body: body),
+    );
+  }
+
+  /// Make a PATCH request
+  Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) async {
+    return _executeWithRefresh(
+      endpoint,
+      (headers) => _httpClient.patch(Uri.parse('$baseUrl$endpoint'),
           headers: headers, body: body),
     );
   }
