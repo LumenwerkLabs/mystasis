@@ -293,7 +293,7 @@ enum SummaryType {
 
 // Structured clinical anamnesis from voice-transcribed consultations
 model Anamnesis {
-  id                      String   @id @default(uuid())
+  id                      String    @id @default(uuid())
   patientId               String
   clinicianId             String
   rawTranscript           String
@@ -305,10 +305,11 @@ model Anamnesis {
   familyHistory           String[]
   reviewOfSystems         String[]
   socialHistory           String[]
-  isReviewed              Boolean  @default(false)
+  isReviewed              Boolean   @default(false)
   recordedAt              DateTime
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  deletedAt               DateTime? // Soft-delete for HIPAA retention compliance
 
   patient   User @relation("PatientAnamneses", fields: [patientId], references: [id], onDelete: Cascade)
   clinician User @relation("ClinicianAnamneses", fields: [clinicianId], references: [id], onDelete: Cascade)
@@ -317,6 +318,7 @@ model Anamnesis {
   @@index([clinicianId])
   @@index([recordedAt])
   @@index([patientId, recordedAt])
+  @@index([deletedAt])
 }
 
 // Clinic model for multi-tenancy

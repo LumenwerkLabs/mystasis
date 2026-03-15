@@ -157,7 +157,10 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
     AnamnesisAvailability availability,
   ) {
     final issues = <String>[];
-    if (!availability.speechAvailable) {
+    // Only show the speech warning when using on-device transcription.
+    // ElevenLabs doesn't rely on Apple Speech — its availability is
+    // verified at recording time when a temp token is fetched.
+    if (!availability.speechAvailable && !availability.elevenLabsConfigured) {
       issues.add('Speech recognition is not available for your language.');
     }
     if (!availability.foundationModelsAvailable) {
@@ -166,6 +169,7 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
         'and ensure your Mac supports Apple Intelligence.',
       );
     }
+    if (issues.isEmpty) return const SizedBox.shrink();
     return _buildWarningCard(context, issues.join('\n'));
   }
 
@@ -424,6 +428,14 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
             ],
           ),
         ),
+        const SizedBox(height: 12),
+
+        // Grounding verification banner
+        if (anamnesis.grounding != null &&
+            anamnesis.grounding!.overallStatus != GroundingStatus.grounded &&
+            anamnesis.grounding!.overallStatus != GroundingStatus.empty)
+          _buildGroundingBanner(context, anamnesis.grounding!),
+
         const SizedBox(height: 20),
 
         // Structured sections
@@ -431,41 +443,49 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
           title: 'Chief Complaint',
           icon: Icons.priority_high,
           content: anamnesis.chiefComplaint,
+          contentGrounding: anamnesis.grounding?.chiefComplaint,
         ),
         _AnamnesisSectionCard(
           title: 'History of Present Illness',
           icon: Icons.history,
           content: anamnesis.historyOfPresentIllness,
+          contentGrounding: anamnesis.grounding?.historyOfPresentIllness,
         ),
         _AnamnesisSectionCard(
           title: 'Past Medical History',
           icon: Icons.medical_information,
           items: anamnesis.pastMedicalHistory,
+          itemGroundings: anamnesis.grounding?.pastMedicalHistory,
         ),
         _AnamnesisSectionCard(
           title: 'Current Medications',
           icon: Icons.medication,
           items: anamnesis.currentMedications,
+          itemGroundings: anamnesis.grounding?.currentMedications,
         ),
         _AnamnesisSectionCard(
           title: 'Allergies',
           icon: Icons.warning_amber,
           items: anamnesis.allergies,
+          itemGroundings: anamnesis.grounding?.allergies,
         ),
         _AnamnesisSectionCard(
           title: 'Family History',
           icon: Icons.family_restroom,
           items: anamnesis.familyHistory,
+          itemGroundings: anamnesis.grounding?.familyHistory,
         ),
         _AnamnesisSectionCard(
           title: 'Review of Systems',
           icon: Icons.checklist,
           items: anamnesis.reviewOfSystems,
+          itemGroundings: anamnesis.grounding?.reviewOfSystems,
         ),
         _AnamnesisSectionCard(
           title: 'Social History',
           icon: Icons.person,
           items: anamnesis.socialHistory,
+          itemGroundings: anamnesis.grounding?.socialHistory,
         ),
 
         const SizedBox(height: 16),
@@ -523,13 +543,14 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
         Row(
           children: [
             ElevatedButton.icon(
-              onPressed: widget.patientId != null
+              onPressed: widget.patientId != null &&
+                      context.read<AuthProvider>().user?.id != null
                   ? () {
                       final clinicianId =
-                          context.read<AuthProvider>().user?.id;
+                          context.read<AuthProvider>().user!.id;
                       provider.saveAnamnesis(
                         widget.patientId!,
-                        clinicianId ?? '',
+                        clinicianId,
                       );
                     }
                   : null,
@@ -734,6 +755,61 @@ class _AnamnesisScreenState extends State<AnamnesisScreen> {
     );
   }
 
+  Widget _buildGroundingBanner(
+      BuildContext context, AnamnesisGrounding grounding) {
+    final isUngrounded = grounding.overallStatus == GroundingStatus.ungrounded;
+    final color =
+        isUngrounded ? MystasisTheme.errorRed : MystasisTheme.signalAmber;
+    final message = isUngrounded
+        ? 'Some extracted information could not be verified against the '
+            'transcript and may be inaccurate. Items marked in red need '
+            'careful review before saving.'
+        : 'Some extracted information could not be fully verified against '
+            'the transcript. Items marked with a warning need review.';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isUngrounded ? Icons.error_outline : Icons.warning_amber,
+            size: 20,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Verification Warning',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: MystasisTheme.deepGraphite,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWarningCard(BuildContext context, String message) {
     return Container(
       width: double.infinity,
@@ -863,11 +939,19 @@ class _AnamnesisSectionCard extends StatelessWidget {
   final String? content;
   final List<String>? items;
 
+  /// Grounding status for string content fields (chiefComplaint, HPI).
+  final FieldGrounding? contentGrounding;
+
+  /// Per-item grounding statuses for array fields.
+  final List<FieldGrounding>? itemGroundings;
+
   const _AnamnesisSectionCard({
     required this.title,
     required this.icon,
     this.content,
     this.items,
+    this.contentGrounding,
+    this.itemGroundings,
   });
 
   @override
@@ -897,12 +981,16 @@ class _AnamnesisSectionCard extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: MystasisTheme.deepBioTeal),
               const SizedBox(width: 10),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontSize: 16,
-                    ),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontSize: 16,
+                      ),
+                ),
               ),
+              if (contentGrounding != null)
+                _GroundingBadge(grounding: contentGrounding!),
             ],
           ),
           const SizedBox(height: 12),
@@ -922,30 +1010,114 @@ class _AnamnesisSectionCard extends StatelessWidget {
                   ),
             )
           else if (items != null)
-            ...items!.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Icon(Icons.circle,
-                            size: 6, color: MystasisTheme.deepBioTeal),
+            ...items!.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final grounding = (itemGroundings != null &&
+                      index < itemGroundings!.length)
+                  ? itemGroundings![index]
+                  : null;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Icon(
+                        Icons.circle,
+                        size: 6,
+                        color: _bulletColor(grounding),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: SelectableText(
-                          item,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    height: 1.5,
-                                  ),
-                        ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: SelectableText(
+                        item,
+                        style:
+                            Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  height: 1.5,
+                                ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                    if (grounding != null &&
+                        grounding.status != GroundingStatus.grounded &&
+                        grounding.status != GroundingStatus.empty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: _GroundingBadge(grounding: grounding),
+                      ),
+                  ],
+                ),
+              );
+            }),
         ],
+      ),
+    );
+  }
+
+  Color _bulletColor(FieldGrounding? grounding) {
+    if (grounding == null) return MystasisTheme.deepBioTeal;
+    switch (grounding.status) {
+      case GroundingStatus.grounded:
+      case GroundingStatus.empty:
+        return MystasisTheme.deepBioTeal;
+      case GroundingStatus.partial:
+        return MystasisTheme.signalAmber;
+      case GroundingStatus.ungrounded:
+        return MystasisTheme.errorRed;
+    }
+  }
+}
+
+/// Small badge indicating grounding verification status.
+class _GroundingBadge extends StatelessWidget {
+  final FieldGrounding grounding;
+
+  const _GroundingBadge({required this.grounding});
+
+  @override
+  Widget build(BuildContext context) {
+    if (grounding.status == GroundingStatus.grounded ||
+        grounding.status == GroundingStatus.empty) {
+      return const SizedBox.shrink();
+    }
+
+    final isUngrounded = grounding.status == GroundingStatus.ungrounded;
+    final color =
+        isUngrounded ? MystasisTheme.errorRed : MystasisTheme.signalAmber;
+    final label = isUngrounded ? 'Not in transcript' : 'Verify';
+    final icon = isUngrounded ? Icons.error_outline : Icons.warning_amber;
+
+    return Tooltip(
+      message: grounding.unmatchedTerms.isNotEmpty
+          ? 'Unmatched: ${grounding.unmatchedTerms.join(", ")}'
+          : isUngrounded
+              ? 'This content was not found in the transcript'
+              : 'Some terms could not be verified',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }

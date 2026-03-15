@@ -1,3 +1,87 @@
+/// Grounding verification status for an AI-extracted field.
+/// Used during clinician review to flag potential hallucinations.
+enum GroundingStatus { grounded, partial, ungrounded, empty }
+
+/// Grounding result for a single field or array item.
+class FieldGrounding {
+  final GroundingStatus status;
+  final double score;
+  final List<String> unmatchedTerms;
+
+  const FieldGrounding({
+    required this.status,
+    required this.score,
+    this.unmatchedTerms = const [],
+  });
+
+  factory FieldGrounding.fromMap(Map<String, dynamic> map) {
+    return FieldGrounding(
+      status: GroundingStatus.values.firstWhere(
+        (e) => e.name == (map['status'] as String? ?? 'empty'),
+        orElse: () => GroundingStatus.empty,
+      ),
+      score: (map['score'] as num?)?.toDouble() ?? 0.0,
+      unmatchedTerms: AnamnesisModel._castStringList(map['unmatchedTerms']),
+    );
+  }
+}
+
+/// Grounding report for the entire anamnesis.
+/// Ephemeral — used during review, not persisted to the backend.
+class AnamnesisGrounding {
+  final GroundingStatus overallStatus;
+  final FieldGrounding chiefComplaint;
+  final FieldGrounding historyOfPresentIllness;
+  final List<FieldGrounding> pastMedicalHistory;
+  final List<FieldGrounding> currentMedications;
+  final List<FieldGrounding> allergies;
+  final List<FieldGrounding> familyHistory;
+  final List<FieldGrounding> reviewOfSystems;
+  final List<FieldGrounding> socialHistory;
+
+  const AnamnesisGrounding({
+    required this.overallStatus,
+    required this.chiefComplaint,
+    required this.historyOfPresentIllness,
+    required this.pastMedicalHistory,
+    required this.currentMedications,
+    required this.allergies,
+    required this.familyHistory,
+    required this.reviewOfSystems,
+    required this.socialHistory,
+  });
+
+  factory AnamnesisGrounding.fromMap(Map<String, dynamic> map) {
+    return AnamnesisGrounding(
+      overallStatus: GroundingStatus.values.firstWhere(
+        (e) => e.name == (map['overallStatus'] as String? ?? 'empty'),
+        orElse: () => GroundingStatus.empty,
+      ),
+      chiefComplaint: FieldGrounding.fromMap(
+          Map<String, dynamic>.from(map['chiefComplaint'] as Map? ?? {})),
+      historyOfPresentIllness: FieldGrounding.fromMap(
+          Map<String, dynamic>.from(
+              map['historyOfPresentIllness'] as Map? ?? {})),
+      pastMedicalHistory: _castFieldGroundingList(map['pastMedicalHistory']),
+      currentMedications: _castFieldGroundingList(map['currentMedications']),
+      allergies: _castFieldGroundingList(map['allergies']),
+      familyHistory: _castFieldGroundingList(map['familyHistory']),
+      reviewOfSystems: _castFieldGroundingList(map['reviewOfSystems']),
+      socialHistory: _castFieldGroundingList(map['socialHistory']),
+    );
+  }
+
+  static List<FieldGrounding> _castFieldGroundingList(dynamic value) {
+    if (value is List) {
+      return value
+          .map((e) =>
+              FieldGrounding.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+}
+
 /// Structured anamnesis data extracted from a voice-transcribed consultation.
 /// All structured fields are AI-generated from the raw transcript and require
 /// clinician review before being considered accurate.
@@ -17,6 +101,10 @@ class AnamnesisModel {
   final String? clinicianId;
   final bool isReviewed;
 
+  /// Grounding verification report from on-device structuring.
+  /// Null for records loaded from the backend (grounding is ephemeral).
+  final AnamnesisGrounding? grounding;
+
   const AnamnesisModel({
     this.id,
     required this.patientId,
@@ -32,6 +120,7 @@ class AnamnesisModel {
     required this.recordedAt,
     this.clinicianId,
     this.isReviewed = false,
+    this.grounding,
   });
 
   /// Create from the structured output map returned by the native channel.
@@ -41,6 +130,12 @@ class AnamnesisModel {
     required Map<String, dynamic> structured,
     String? clinicianId,
   }) {
+    AnamnesisGrounding? grounding;
+    if (structured['grounding'] != null) {
+      grounding = AnamnesisGrounding.fromMap(
+          Map<String, dynamic>.from(structured['grounding'] as Map));
+    }
+
     return AnamnesisModel(
       patientId: patientId,
       rawTranscript: rawTranscript,
@@ -57,6 +152,7 @@ class AnamnesisModel {
       socialHistory: _castStringList(structured['socialHistory']),
       recordedAt: DateTime.now(),
       clinicianId: clinicianId,
+      grounding: grounding,
     );
   }
 
@@ -114,6 +210,7 @@ class AnamnesisModel {
     DateTime? recordedAt,
     String? clinicianId,
     bool? isReviewed,
+    AnamnesisGrounding? grounding,
   }) {
     return AnamnesisModel(
       id: id ?? this.id,
@@ -131,6 +228,7 @@ class AnamnesisModel {
       recordedAt: recordedAt ?? this.recordedAt,
       clinicianId: clinicianId ?? this.clinicianId,
       isReviewed: isReviewed ?? this.isReviewed,
+      grounding: grounding ?? this.grounding,
     );
   }
 

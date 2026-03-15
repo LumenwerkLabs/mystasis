@@ -6,6 +6,8 @@ import {
   IsDateString,
   IsOptional,
   IsBoolean,
+  MaxLength,
+  ArrayMaxSize,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -33,6 +35,7 @@ export class CreateAnamnesisDto {
   })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500_000)
   rawTranscript: string;
 
   @ApiProperty({
@@ -40,6 +43,7 @@ export class CreateAnamnesisDto {
     example: 'Recurring headaches for the past two weeks',
   })
   @IsString()
+  @MaxLength(2000)
   chiefComplaint: string;
 
   @ApiProperty({
@@ -47,6 +51,7 @@ export class CreateAnamnesisDto {
     example: 'Patient reports bilateral frontal headaches starting two weeks ago...',
   })
   @IsString()
+  @MaxLength(50_000)
   historyOfPresentIllness: string;
 
   @ApiProperty({
@@ -55,7 +60,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   pastMedicalHistory: string[];
 
   @ApiProperty({
@@ -64,7 +71,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   currentMedications: string[];
 
   @ApiProperty({
@@ -73,7 +82,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   allergies: string[];
 
   @ApiProperty({
@@ -82,7 +93,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   familyHistory: string[];
 
   @ApiProperty({
@@ -91,7 +104,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(1000, { each: true })
   reviewOfSystems: string[];
 
   @ApiProperty({
@@ -100,7 +115,9 @@ export class CreateAnamnesisDto {
     type: [String],
   })
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   socialHistory: string[];
 
   @ApiProperty({

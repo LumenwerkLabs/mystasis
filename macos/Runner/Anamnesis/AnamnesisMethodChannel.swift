@@ -61,10 +61,13 @@ class AnamnesisMethodChannel: NSObject {
 
         case "checkAvailability":
             let foundationModelsAvailable = await structuringService.isAvailable
+            let isElevenLabs = transcriptionService is ElevenLabsTranscriptionService
             result([
                 "speechAvailable": transcriptionService.isAvailable,
                 "foundationModelsAvailable": foundationModelsAvailable,
-                "elevenLabsConfigured": transcriptionService is ElevenLabsTranscriptionService && transcriptionService.isAvailable,
+                // Token is fetched per-session at recording time, so report
+                // configured=true whenever ElevenLabs is the active backend.
+                "elevenLabsConfigured": isElevenLabs,
             ])
 
         case "requestMicrophonePermission":
@@ -130,8 +133,8 @@ class AnamnesisMethodChannel: NSObject {
             }
 
             do {
-                let structured = try await structuringService.structure(transcript: transcript)
-                result(structuringService.toDictionary(structured))
+                let verified = try await structuringService.structure(transcript: transcript)
+                result(structuringService.toDictionary(verified))
             } catch {
                 result(FlutterError(
                     code: "STRUCTURING_ERROR",

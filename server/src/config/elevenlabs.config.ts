@@ -30,9 +30,19 @@ export const elevenlabsConfig = registerAs(
       process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io'
     ).trim();
 
-    // Enforce HTTPS for non-empty, non-localhost URLs
-    if (apiUrl && !apiUrl.startsWith('https://') && !apiUrl.includes('localhost')) {
-      throw new Error('ELEVENLABS_API_URL must use HTTPS');
+    // Enforce HTTPS for non-localhost URLs
+    if (apiUrl && !apiUrl.startsWith('https://')) {
+      try {
+        const hostname = new URL(apiUrl).hostname;
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          throw new Error('ELEVENLABS_API_URL must use HTTPS');
+        }
+      } catch (e) {
+        if (e instanceof TypeError) {
+          throw new Error('ELEVENLABS_API_URL is not a valid URL');
+        }
+        throw e;
+      }
     }
 
     return { apiKey, apiUrl };

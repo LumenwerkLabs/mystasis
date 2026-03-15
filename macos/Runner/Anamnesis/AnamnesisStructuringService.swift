@@ -3,34 +3,42 @@ import FoundationModels
 
 // MARK: - Structured Output Type
 
-/// Structured clinical anamnesis extracted from a patient consultation transcript.
+/// Structured clinical anamnesis extracted VERBATIM from a patient consultation transcript.
 /// Uses Foundation Models' @Generable macro for constrained generation.
+/// Every field must contain only information directly stated in the transcript.
 @available(macOS 26.0, *)
-@Generable(description: "Structured clinical anamnesis extracted from a patient consultation transcript")
+@Generable(description: "Clinical information extracted VERBATIM from a consultation transcript. Every field must contain only information directly stated in the transcript.")
 struct StructuredAnamnesis {
-    @Guide(description: "The patient's main reason for the visit, stated concisely")
+    @Guide(description: "The patient's stated reason for the visit, using their own words from the transcript. Leave empty string if not explicitly stated.")
     var chiefComplaint: String
 
-    @Guide(description: "Details of the present illness: symptoms, onset, duration, severity, aggravating and relieving factors")
+    @Guide(description: "Details of the present illness exactly as described in the transcript: symptoms, onset, duration, severity. Only include what was explicitly discussed. Use empty string if not mentioned.")
     var historyOfPresentIllness: String
 
-    @Guide(description: "Relevant past medical conditions, surgeries, or hospitalizations mentioned")
+    @Guide(description: "Past medical conditions, surgeries, or hospitalizations explicitly mentioned in the transcript. Use exact terms from the conversation. Empty array if none mentioned.")
     var pastMedicalHistory: [String]
 
-    @Guide(description: "Current medications the patient reports taking, including dosages if mentioned")
+    @Guide(description: "Medications the patient explicitly named in the transcript, with dosages only if stated. Empty array if none mentioned.")
     var currentMedications: [String]
 
-    @Guide(description: "Allergies mentioned by the patient, including drug allergies and reactions")
+    @Guide(description: "Allergies explicitly stated by the patient in the transcript. Include only reactions that were described. Empty array if none mentioned.")
     var allergies: [String]
 
-    @Guide(description: "Family medical history mentioned during the consultation")
+    @Guide(description: "Family medical conditions explicitly mentioned in the transcript. Empty array if not discussed.")
     var familyHistory: [String]
 
-    @Guide(description: "Review of systems: symptoms organized by body system that were discussed")
+    @Guide(description: "Symptoms by body system that were explicitly discussed in the transcript. Empty array if no review of systems was performed.")
     var reviewOfSystems: [String]
 
-    @Guide(description: "Social history including lifestyle factors: smoking, alcohol, exercise, diet, occupation, living situation")
+    @Guide(description: "Social and lifestyle factors the patient explicitly mentioned: smoking, alcohol, exercise, occupation. Empty array if not discussed.")
     var socialHistory: [String]
+}
+
+/// Structured anamnesis paired with its grounding verification report.
+@available(macOS 26.0, *)
+struct VerifiedAnamnesis {
+    let structured: StructuredAnamnesis
+    let grounding: GroundingReport
 }
 
 // MARK: - Structuring Service
@@ -40,16 +48,17 @@ struct StructuredAnamnesis {
 class AnamnesisStructuringService {
 
     private let instructions = """
-        You are a medical scribe assistant. Given a raw transcript of a doctor-patient \
-        consultation, extract and organize the clinical information into a structured \
-        anamnesis format.
+        You are a medical transcription EXTRACTOR. Your role is to identify and \
+        copy clinical information that is EXPLICITLY STATED in the transcript.
 
-        Rules:
-        - Only include information explicitly mentioned in the transcript.
-        - Use empty arrays for sections where no relevant information was discussed.
-        - Be concise but accurate.
-        - Do not infer or add information not present in the transcript.
-        - If something is unclear or ambiguous, note it as "[unclear]".
+        STRICT RULES:
+        1. ONLY extract information the patient or clinician explicitly said.
+        2. Use the patient's and clinician's own words wherever possible.
+        3. NEVER infer, deduce, or add information not directly stated.
+        4. If a category was not discussed, leave it empty (empty string or empty array).
+        5. If something is ambiguous, quote the exact words and add "[verbatim, unclear]".
+        6. Do NOT add medical terminology unless the speaker used it.
+        7. Do NOT complete partial information — extract only what was said.
         """
 
     /// Check if Foundation Models is available on this device.
@@ -59,29 +68,60 @@ class AnamnesisStructuringService {
         }
     }
 
-    /// Structure a transcript into a structured anamnesis.
+    /// Structure a transcript into a verified anamnesis.
     /// Handles chunking automatically for long transcripts.
-    func structure(transcript: String) async throws -> StructuredAnamnesis {
+    /// The returned ``VerifiedAnamnesis`` includes a grounding report that
+    /// cross-references each extracted field against the original transcript.
+    func structure(transcript: String) async throws -> VerifiedAnamnesis {
         let chunks = chunkTranscript(transcript, maxTokens: 3000)
 
+        let structured: StructuredAnamnesis
         if chunks.count == 1 {
-            return try await structureSingleChunk(chunks[0])
+            structured = try await structureSingleChunk(chunks[0])
         } else {
-            return try await structureMultipleChunks(chunks)
+            structured = try await structureMultipleChunks(chunks)
         }
+
+        // Always verify against the ORIGINAL transcript, not summaries
+        let verifier = TranscriptGroundingVerifier()
+        let grounding = verifier.verify(structured: structured, against: transcript)
+        return VerifiedAnamnesis(structured: structured, grounding: grounding)
     }
 
-    /// Convert a StructuredAnamnesis to a dictionary for Flutter serialization.
-    func toDictionary(_ anamnesis: StructuredAnamnesis) -> [String: Any] {
+    /// Convert a VerifiedAnamnesis to a dictionary for Flutter serialization.
+    /// Includes both the structured fields and the grounding verification report.
+    func toDictionary(_ verified: VerifiedAnamnesis) -> [String: Any] {
+        let a = verified.structured
+        let g = verified.grounding
         return [
-            "chiefComplaint": anamnesis.chiefComplaint,
-            "historyOfPresentIllness": anamnesis.historyOfPresentIllness,
-            "pastMedicalHistory": anamnesis.pastMedicalHistory,
-            "currentMedications": anamnesis.currentMedications,
-            "allergies": anamnesis.allergies,
-            "familyHistory": anamnesis.familyHistory,
-            "reviewOfSystems": anamnesis.reviewOfSystems,
-            "socialHistory": anamnesis.socialHistory,
+            "chiefComplaint": a.chiefComplaint,
+            "historyOfPresentIllness": a.historyOfPresentIllness,
+            "pastMedicalHistory": a.pastMedicalHistory,
+            "currentMedications": a.currentMedications,
+            "allergies": a.allergies,
+            "familyHistory": a.familyHistory,
+            "reviewOfSystems": a.reviewOfSystems,
+            "socialHistory": a.socialHistory,
+            "grounding": [
+                "overallStatus": g.overallStatus.rawValue,
+                "chiefComplaint": groundingDict(g.chiefComplaint),
+                "historyOfPresentIllness": groundingDict(g.historyOfPresentIllness),
+                "pastMedicalHistory": g.pastMedicalHistory.map { groundingDict($0) },
+                "currentMedications": g.currentMedications.map { groundingDict($0) },
+                "allergies": g.allergies.map { groundingDict($0) },
+                "familyHistory": g.familyHistory.map { groundingDict($0) },
+                "reviewOfSystems": g.reviewOfSystems.map { groundingDict($0) },
+                "socialHistory": g.socialHistory.map { groundingDict($0) },
+            ] as [String: Any],
+        ]
+    }
+
+    /// Convert a FieldGrounding to a dictionary for Flutter serialization.
+    private func groundingDict(_ fg: FieldGrounding) -> [String: Any] {
+        [
+            "status": fg.status.rawValue,
+            "score": fg.score,
+            "unmatchedTerms": fg.unmatchedTerms,
         ]
     }
 
@@ -90,8 +130,10 @@ class AnamnesisStructuringService {
     private func structureSingleChunk(_ text: String) async throws -> StructuredAnamnesis {
         let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond(
-            to: "Structure this consultation transcript into an anamnesis:\n\n\(text)",
-            generating: StructuredAnamnesis.self
+            to: "Extract clinical information from this consultation transcript. "
+              + "Only include information explicitly stated:\n\n\(text)",
+            generating: StructuredAnamnesis.self,
+            options: GenerationOptions(sampling: .greedy)
         )
         return response.content
     }
@@ -103,12 +145,14 @@ class AnamnesisStructuringService {
         var summaries: [String] = []
         for (index, chunk) in chunks.enumerated() {
             let session = LanguageModelSession(instructions: """
-                Summarize the key clinical information from this consultation transcript \
-                segment in concise bullet points. Include symptoms, conditions, medications, \
-                allergies, and any other medically relevant details mentioned.
+                Extract the key clinical information from this consultation transcript \
+                segment as concise bullet points. Use the speaker's own words. Include \
+                only symptoms, conditions, medications, allergies, and other medically \
+                relevant details that are EXPLICITLY STATED. Do not infer or add anything.
                 """)
             let response = try await session.respond(
-                to: "Segment \(index + 1) of \(chunks.count):\n\n\(chunk)"
+                to: "Segment \(index + 1) of \(chunks.count):\n\n\(chunk)",
+                options: GenerationOptions(sampling: .greedy)
             )
             summaries.append(response.content)
         }
@@ -120,8 +164,10 @@ class AnamnesisStructuringService {
 
         let session = LanguageModelSession(instructions: instructions)
         let response = try await session.respond(
-            to: "Structure this consultation summary into an anamnesis:\n\n\(combinedSummary)",
-            generating: StructuredAnamnesis.self
+            to: "Extract clinical information from this consultation summary. "
+              + "Only include information explicitly stated:\n\n\(combinedSummary)",
+            generating: StructuredAnamnesis.self,
+            options: GenerationOptions(sampling: .greedy)
         )
         return response.content
     }

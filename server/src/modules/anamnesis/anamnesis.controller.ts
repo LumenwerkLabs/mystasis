@@ -11,6 +11,7 @@ import {
   ForbiddenException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { Throttle } from '../../common/decorators/throttle.decorator';
 import {
   ApiTags,
   ApiOperation,
@@ -114,10 +115,11 @@ export class AnamnesisController {
    */
   @Post('transcription-token')
   @Roles(UserRole.CLINICIAN)
+  @Throttle(5, 60)
   @ApiOperation({
     summary: 'Generate a temporary ElevenLabs transcription token',
     description:
-      'Returns a single-use token (15 min expiry) for client-side WebSocket connection to ElevenLabs STT. Only clinicians can request tokens.',
+      'Returns a single-use token (15 min expiry) for client-side WebSocket connection to ElevenLabs STT. Only clinicians can request tokens. Rate limited to 5 requests per minute.',
   })
   @ApiResponse({ status: 201, description: 'Token generated' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -212,13 +214,14 @@ export class AnamnesisController {
   @ApiResponse({ status: 200, description: 'Anamnesis updated successfully' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - CLINICIAN role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden - only the creating clinician can update' })
   @ApiResponse({ status: 404, description: 'Anamnesis not found' })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAnamnesisDto,
+    @CurrentUser() user: UserPayload,
   ) {
-    return this.anamnesisService.update(id, dto);
+    return this.anamnesisService.update(id, dto, user.sub);
   }
 
   /**
@@ -227,9 +230,9 @@ export class AnamnesisController {
   @Delete(':id')
   @Roles(UserRole.CLINICIAN)
   @ApiOperation({
-    summary: 'Delete an anamnesis record',
+    summary: 'Soft-delete an anamnesis record',
     description:
-      'Permanently deletes an anamnesis record. Only accessible by clinicians. This action cannot be undone.',
+      'Marks an anamnesis record as deleted. Only the creating clinician can delete. Records are retained for audit compliance.',
   })
   @ApiParam({
     name: 'id',
@@ -240,9 +243,12 @@ export class AnamnesisController {
   @ApiResponse({ status: 200, description: 'Anamnesis deleted successfully' })
   @ApiResponse({ status: 400, description: 'Invalid ID format' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - CLINICIAN role required' })
+  @ApiResponse({ status: 403, description: 'Forbidden - only the creating clinician can delete' })
   @ApiResponse({ status: 404, description: 'Anamnesis not found' })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.anamnesisService.remove(id);
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.anamnesisService.remove(id, user.sub);
   }
 }

@@ -18,10 +18,17 @@ class ElevenLabsTranscriptionService: TranscriptionService {
 
     // MARK: - Properties
 
-    private var token: String?
-    private var webSocketTask: URLSessionWebSocketTask?
-    private var urlSession: URLSession?
-    private var audioEngine: AVAudioEngine?
+    /// Lock protecting connection-related mutable state (token, webSocket, session, audio engine).
+    /// Must be held when reading or writing these properties from any thread.
+    private var connectionLock = OSAllocatedUnfairLock(initialState: ConnectionState())
+
+    private struct ConnectionState {
+        var token: String?
+        var webSocketTask: URLSessionWebSocketTask?
+        var urlSession: URLSession?
+        var audioEngine: AVAudioEngine?
+    }
+
     private var stateLock = OSAllocatedUnfairLock(initialState: TranscriptState())
 
     private struct TranscriptState {
@@ -46,8 +53,10 @@ class ElevenLabsTranscriptionService: TranscriptionService {
     // MARK: - TranscriptionService
 
     var isAvailable: Bool {
-        guard let token, !token.isEmpty else { return false }
-        return true
+        connectionLock.withLock { state in
+            guard let token = state.token, !token.isEmpty else { return false }
+            return true
+        }
     }
 
     var displayName: String { "Cloud (ElevenLabs)" }
@@ -55,12 +64,15 @@ class ElevenLabsTranscriptionService: TranscriptionService {
     var apiKeyRequired: Bool { true }
 
     func configure(apiKey: String) {
-        self.token = apiKey
+        connectionLock.withLock { $0.token = apiKey }
     }
 
     func startTranscription(locale: Locale) async throws -> AsyncStream<TranscriptionUpdate> {
-        guard let token, !token.isEmpty else {
-            throw TranscriptionError.serviceUnavailable
+        let currentToken: String = try connectionLock.withLock { state in
+            guard let token = state.token, !token.isEmpty else {
+                throw TranscriptionError.serviceUnavailable
+            }
+            return token
         }
 
         let alreadyRecording = stateLock.withLock { $0.isRecording }
@@ -72,7 +84,7 @@ class ElevenLabsTranscriptionService: TranscriptionService {
         guard var urlComponents = URLComponents(string: Self.webSocketURL) else {
             throw TranscriptionError.serviceUnavailable
         }
-        urlComponents.queryItems = [URLQueryItem(name: "token", value: token)]
+        urlComponents.queryItems = [URLQueryItem(name: "token", value: currentToken)]
         guard let url = urlComponents.url else {
             throw TranscriptionError.serviceUnavailable
         }
@@ -80,9 +92,11 @@ class ElevenLabsTranscriptionService: TranscriptionService {
 
         // Use an ephemeral session to avoid caching credentials/URLs on disk
         let session = URLSession(configuration: .ephemeral)
-        self.urlSession = session
         let webSocketTask = session.webSocketTask(with: request)
-        self.webSocketTask = webSocketTask
+        connectionLock.withLock { state in
+            state.urlSession = session
+            state.webSocketTask = webSocketTask
+        }
         webSocketTask.resume()
 
         // Step 2: Wait for session_started and send session config
@@ -120,7 +134,7 @@ class ElevenLabsTranscriptionService: TranscriptionService {
 
         // Step 3: Set up AVAudioEngine for mic capture
         let audioEngine = AVAudioEngine()
-        self.audioEngine = audioEngine
+        connectionLock.withLock { $0.audioEngine = audioEngine }
 
         let inputNode = audioEngine.inputNode
         let micFormat = inputNode.outputFormat(forBus: 0)
@@ -178,7 +192,8 @@ class ElevenLabsTranscriptionService: TranscriptionService {
             ]
             if let jsonData = try? JSONSerialization.data(withJSONObject: message),
                let jsonString = String(data: jsonData, encoding: .utf8) {
-                self.webSocketTask?.send(.string(jsonString)) { sendError in
+                let ws = self.connectionLock.withLock { $0.webSocketTask }
+                ws?.send(.string(jsonString)) { sendError in
                     if let sendError {
                         Self.logger.error("Failed to send audio chunk: \(sendError.localizedDescription)")
                     }
@@ -196,7 +211,7 @@ class ElevenLabsTranscriptionService: TranscriptionService {
                     return
                 }
 
-                while let webSocket = self.webSocketTask {
+                while let webSocket = self.connectionLock.withLock({ $0.webSocketTask }) {
                     do {
                         let message = try await webSocket.receive()
                         guard case .string(let text) = message,
@@ -310,31 +325,37 @@ class ElevenLabsTranscriptionService: TranscriptionService {
             return accumulatedTranscript
         }
 
+        // Snapshot and clear connection state under lock
+        let (engine, ws, session) = connectionLock.withLock { state -> (AVAudioEngine?, URLSessionWebSocketTask?, URLSession?) in
+            let e = state.audioEngine
+            let w = state.webSocketTask
+            let s = state.urlSession
+            state.audioEngine = nil
+            state.webSocketTask = nil
+            state.urlSession = nil
+            state.token = nil
+            return (e, w, s)
+        }
+
         // Stop audio engine
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        audioEngine?.stop()
-        audioEngine = nil
+        engine?.inputNode.removeTap(onBus: 0)
+        engine?.stop()
 
         // Send end_of_stream to ElevenLabs
-        if let webSocketTask {
+        if let ws {
             let endMessage: [String: Any] = ["message_type": "end_of_stream"]
             if let data = try? JSONSerialization.data(withJSONObject: endMessage),
                let str = String(data: data, encoding: .utf8) {
-                try? await webSocketTask.send(.string(str))
+                try? await ws.send(.string(str))
             }
 
             // Allow a brief moment for final committed_transcript to arrive
             try? await Task.sleep(for: .milliseconds(500))
 
             // Close the WebSocket and invalidate the session
-            webSocketTask.cancel(with: .normalClosure, reason: nil)
-            self.webSocketTask = nil
-            self.urlSession?.invalidateAndCancel()
-            self.urlSession = nil
+            ws.cancel(with: .normalClosure, reason: nil)
+            session?.invalidateAndCancel()
         }
-
-        // Clear the consumed token — a fresh one is needed for the next session
-        self.token = nil
 
         let finalTranscript = accumulatedTranscript
 

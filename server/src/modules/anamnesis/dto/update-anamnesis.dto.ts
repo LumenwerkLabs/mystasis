@@ -3,6 +3,8 @@ import {
   IsArray,
   IsOptional,
   IsBoolean,
+  MaxLength,
+  ArrayMaxSize,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -20,6 +22,7 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(2000)
   chiefComplaint?: string;
 
   @ApiPropertyOptional({
@@ -27,6 +30,7 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(50_000)
   historyOfPresentIllness?: string;
 
   @ApiPropertyOptional({
@@ -35,7 +39,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   pastMedicalHistory?: string[];
 
   @ApiPropertyOptional({
@@ -44,7 +50,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   currentMedications?: string[];
 
   @ApiPropertyOptional({
@@ -53,7 +61,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   allergies?: string[];
 
   @ApiPropertyOptional({
@@ -62,7 +72,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   familyHistory?: string[];
 
   @ApiPropertyOptional({
@@ -71,7 +83,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(1000, { each: true })
   reviewOfSystems?: string[];
 
   @ApiPropertyOptional({
@@ -80,7 +94,9 @@ export class UpdateAnamnesisDto {
   })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(100)
   @IsString({ each: true })
+  @MaxLength(500, { each: true })
   socialHistory?: string[];
 
   @ApiPropertyOptional({

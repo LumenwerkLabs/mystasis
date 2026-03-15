@@ -3,6 +3,7 @@ import {
   Inject,
   Logger,
   NotFoundException,
+  ForbiddenException,
   ServiceUnavailableException,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -58,6 +59,34 @@ export class AnamnesisService {
    * @returns The created anamnesis record
    * @throws {NotFoundException} When the patient does not exist
    */
+  /**
+   * Logs PHI access events for HIPAA audit trail compliance.
+   */
+  private logPhiAccess(
+    action: string,
+    userId: string,
+    recordId: string,
+    patientId?: string,
+  ) {
+    this.logger.log(
+      `PHI_AUDIT: action=${action} userId=${userId} recordId=${recordId}${patientId ? ` patientId=${patientId}` : ''}`,
+    );
+  }
+
+  /**
+   * Validates that the requesting clinician owns the anamnesis record.
+   */
+  private validateClinicianOwnership(
+    anamnesis: { clinicianId: string },
+    clinicianId: string,
+  ) {
+    if (anamnesis.clinicianId !== clinicianId) {
+      throw new ForbiddenException(
+        'You can only modify anamnesis records you created',
+      );
+    }
+  }
+
   async create(data: {
     patientId: string;
     clinicianId: string;
@@ -84,7 +113,7 @@ export class AnamnesisService {
       );
     }
 
-    return this.prisma.anamnesis.create({
+    const result = await this.prisma.anamnesis.create({
       data: {
         patientId: data.patientId,
         clinicianId: data.clinicianId,
@@ -101,6 +130,9 @@ export class AnamnesisService {
         isReviewed: data.isReviewed ?? false,
       },
     });
+
+    this.logPhiAccess('CREATE', data.clinicianId, result.id, data.patientId);
+    return result;
   }
 
   /**
@@ -128,7 +160,10 @@ export class AnamnesisService {
     const limit = options?.limit ?? 10;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.AnamnesisWhereInput = { patientId };
+    const where: Prisma.AnamnesisWhereInput = {
+      patientId,
+      deletedAt: null,
+    };
 
     if (options?.startDate || options?.endDate) {
       where.recordedAt = {};
@@ -166,8 +201,8 @@ export class AnamnesisService {
    * @throws {NotFoundException} When no anamnesis exists with the given ID
    */
   async findOne(id: string) {
-    const anamnesis = await this.prisma.anamnesis.findUnique({
-      where: { id },
+    const anamnesis = await this.prisma.anamnesis.findFirst({
+      where: { id, deletedAt: null },
     });
 
     if (!anamnesis) {
@@ -201,39 +236,53 @@ export class AnamnesisService {
       socialHistory?: string[];
       isReviewed?: boolean;
     },
+    clinicianId: string,
   ) {
-    // Check existence
-    const existing = await this.prisma.anamnesis.findUnique({
-      where: { id },
+    const existing = await this.prisma.anamnesis.findFirst({
+      where: { id, deletedAt: null },
     });
     if (!existing) {
       throw new NotFoundException(`Anamnesis with ID ${id} not found`);
     }
 
-    return this.prisma.anamnesis.update({
+    this.validateClinicianOwnership(existing, clinicianId);
+
+    const result = await this.prisma.anamnesis.update({
       where: { id },
       data,
     });
+
+    this.logPhiAccess('UPDATE', clinicianId, id, existing.patientId);
+    return result;
   }
 
   /**
-   * Permanently deletes an anamnesis record.
+   * Soft-deletes an anamnesis record by setting deletedAt timestamp.
+   * Records are retained for HIPAA audit compliance.
    *
    * @param id - UUID of the anamnesis to delete
-   * @returns The deleted anamnesis record
+   * @param clinicianId - UUID of the requesting clinician (must be the creator)
+   * @returns Confirmation with the record ID
    * @throws {NotFoundException} When no anamnesis exists with the given ID
+   * @throws {ForbiddenException} When the clinician is not the record owner
    */
-  async remove(id: string) {
-    const existing = await this.prisma.anamnesis.findUnique({
-      where: { id },
+  async remove(id: string, clinicianId: string) {
+    const existing = await this.prisma.anamnesis.findFirst({
+      where: { id, deletedAt: null },
     });
     if (!existing) {
       throw new NotFoundException(`Anamnesis with ID ${id} not found`);
     }
 
-    return this.prisma.anamnesis.delete({
+    this.validateClinicianOwnership(existing, clinicianId);
+
+    await this.prisma.anamnesis.update({
       where: { id },
+      data: { deletedAt: new Date() },
     });
+
+    this.logPhiAccess('DELETE', clinicianId, id, existing.patientId);
+    return { id, deleted: true };
   }
 
   /**
