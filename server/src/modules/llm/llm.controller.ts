@@ -17,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { UserRole } from '../../generated/prisma/client';
 import { LlmService } from './llm.service';
+import { UsersService } from '../users/users.service';
 import { CreateSummaryDto } from './dto/create-summary.dto';
 import {
   SummaryResponseDto,
@@ -29,6 +30,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { LlmRateLimit } from '../../common/decorators/llm-rate-limit.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Controller for LLM-powered health insights and wellness nudges.
@@ -49,8 +51,12 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @ApiBearerAuth('JWT-auth')
 @Controller('llm')
 @UseGuards(JwtAuthGuard, RolesGuard, LlmRateLimitGuard)
+@AuditPhi('LLMSummary')
 export class LlmController {
-  constructor(private readonly llmService: LlmService) {}
+  constructor(
+    private readonly llmService: LlmService,
+    private readonly usersService: UsersService,
+  ) {}
 
   /**
    * Generate a health summary for a user.
@@ -110,7 +116,20 @@ export class LlmController {
   async createSummary(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: CreateSummaryDto,
+    @CurrentUser() user: UserPayload,
   ): Promise<SummaryResponseDto> {
+    // Verify clinic membership and patient consent before generating summary
+    if (userId !== user.sub) {
+      const targetUser = await this.usersService.findOne(userId);
+      if (targetUser.clinicId !== user.clinicId) {
+        throw new ForbiddenException('Patient is not in your clinic');
+      }
+      if (!targetUser.shareWithClinician) {
+        throw new ForbiddenException(
+          'This patient has not consented to clinician data sharing',
+        );
+      }
+    }
     return this.llmService.generateSummary(userId, dto.summaryType);
   }
 

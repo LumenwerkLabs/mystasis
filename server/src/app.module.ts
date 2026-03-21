@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppConfigModule } from './config/config.module';
 import { CommonModule } from './common/common.module';
@@ -14,6 +14,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { OpenMedModule } from './modules/openmed/openmed.module';
 import { AnamnesisModule } from './modules/anamnesis/anamnesis.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { PhiAuditInterceptor } from './modules/audit/audit.interceptor';
 
 @Module({
   imports: [
@@ -38,6 +40,7 @@ import { AnamnesisModule } from './modules/anamnesis/anamnesis.module';
     LlmModule,
     OpenMedModule,
     AnamnesisModule,
+    AuditModule,
   ],
   controllers: [],
   providers: [
@@ -45,6 +48,11 @@ import { AnamnesisModule } from './modules/anamnesis/anamnesis.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Enable PHI audit logging for @AuditPhi() decorated endpoints
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: PhiAuditInterceptor,
     },
   ],
 })

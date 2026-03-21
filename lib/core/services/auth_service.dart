@@ -207,29 +207,21 @@ class AuthService {
     }
   }
 
-  /// Verify a user's password without creating a session.
-  /// Returns true if the credentials are valid, false otherwise.
-  /// Unlike [signIn], this does not save tokens or update auth state.
-  Future<bool> verifyPassword({
-    required String email,
-    required String password,
-  }) async {
+  /// Verify the current user's password without creating a session.
+  /// Returns true if the password is valid, false otherwise.
+  /// Uses a dedicated endpoint that does not issue tokens or set cookies.
+  Future<bool> verifyPassword({required String password}) async {
     try {
       await _apiClient.post(
-        ApiEndpoints.login,
-        body: {
-          'email': email,
-          'password': password,
-        },
+        ApiEndpoints.verifyPassword,
+        body: {'password': password},
       );
-      // Credentials valid — discard the response (no token saving, no state change)
       return true;
     } on UnauthorizedException {
       return false;
     } on BadRequestException {
       return false;
     } catch (e) {
-      // Re-throw network/server errors so the caller can handle them
       rethrow;
     }
   }

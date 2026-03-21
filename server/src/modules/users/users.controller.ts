@@ -30,6 +30,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Controller for user profile management endpoints.
@@ -181,6 +182,7 @@ export class UsersController {
    */
   @Get(':id')
   @Roles(UserRole.PATIENT, UserRole.CLINICIAN)
+  @AuditPhi('User')
   @ApiOperation({
     summary: 'Get user profile',
     description:
@@ -262,12 +264,23 @@ export class UsersController {
     status: 404,
     description: 'User not found',
   })
+  @AuditPhi('User')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
     @CurrentUser() user: UserPayload,
   ): Promise<UserWithoutPassword> {
     await this.fetchUserWithAccessCheck(id, user);
+
+    // Only the user themselves can change their consent preferences
+    if (user.sub !== id && user.id !== id) {
+      const { shareWithClinician, anonymousResearch, ...safeUpdate } =
+        updateUserDto;
+      void shareWithClinician;
+      void anonymousResearch;
+      return this.usersService.update(id, safeUpdate);
+    }
+
     return this.usersService.update(id, updateUserDto);
   }
 
@@ -312,6 +325,7 @@ export class UsersController {
     status: 404,
     description: 'User not found',
   })
+  @AuditPhi('User')
   async remove(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,

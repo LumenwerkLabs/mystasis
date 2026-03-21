@@ -776,7 +776,7 @@ class _ToggleSetting extends StatelessWidget {
   final String label;
   final String description;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   const _ToggleSetting({
     required this.label,
@@ -817,88 +817,82 @@ class _ToggleSetting extends StatelessWidget {
   }
 }
 
-class _DataSharingCard extends StatefulWidget {
+class _DataSharingCard extends StatelessWidget {
   const _DataSharingCard();
 
   @override
-  State<_DataSharingCard> createState() => _DataSharingCardState();
-}
-
-class _DataSharingCardState extends State<_DataSharingCard> {
-  // TODO: Persist data sharing consent to backend for HIPAA compliance.
-  // These preferences must survive app restarts and be enforced server-side.
-  bool _shareWithClinician = true;
-  bool _anonymousResearch = false;
-
-  @override
   Widget build(BuildContext context) {
-    return _SettingsCard(
-      title: 'Data Sharing',
-      icon: Icons.share_outlined,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: MystasisTheme.signalAmber.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.warning_amber_outlined,
-                  size: 18, color: MystasisTheme.signalAmber),
-              const SizedBox(width: 8),
-              Expanded(
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final user = auth.user;
+        if (user == null) return const SizedBox.shrink();
+
+        return _SettingsCard(
+          title: 'Data Sharing',
+          icon: Icons.share_outlined,
+          children: [
+            if (auth.errorMessage != null) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: MystasisTheme.errorRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(
-                  'Data sharing preferences are not yet saved to your account. '
-                  'Changes will reset when you leave this page.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: MystasisTheme.signalAmber,
-                      ),
+                  auth.errorMessage!,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: MystasisTheme.errorRed),
                 ),
               ),
             ],
-          ),
-        ),
-        _ToggleSetting(
-          label: 'Share with Clinician',
-          description: 'Allow your care team to view data',
-          value: _shareWithClinician,
-          onChanged: (v) => setState(() => _shareWithClinician = v),
-        ),
-        _ToggleSetting(
-          label: 'Anonymous Research',
-          description: 'Contribute to longevity research',
-          value: _anonymousResearch,
-          onChanged: (v) => setState(() => _anonymousResearch = v),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: MystasisTheme.cellularBlue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.info_outline,
-                size: 18,
-                color: MystasisTheme.cellularBlue,
+            _ToggleSetting(
+              label: 'Share with Clinician',
+              description: 'Allow your care team to view data',
+              value: user.shareWithClinician,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateConsent(shareWithClinician: v),
+            ),
+            _ToggleSetting(
+              label: 'Anonymous Research',
+              description: 'Contribute to longevity research',
+              value: user.anonymousResearch,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateConsent(anonymousResearch: v),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: MystasisTheme.cellularBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Your data is encrypted and never sold to third parties.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 18,
                     color: MystasisTheme.cellularBlue,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Your data is encrypted and never sold to third parties.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: MystasisTheme.cellularBlue,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }

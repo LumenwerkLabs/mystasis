@@ -18,8 +18,10 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { AuditService } from '../audit/audit.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { VerifyPasswordDto } from './dto/verify-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { LogoutDto } from './dto/logout.dto';
 import {
@@ -38,6 +40,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly cookieService: CookieService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -158,6 +161,57 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getProfile(@CurrentUser() user: UserPayload): UserPayload {
     return user;
+  }
+
+  /**
+   * Verifies the current user's password without issuing tokens.
+   * Used for sensitive operations (account deletion, password change confirmation).
+   */
+  @Post('verify-password')
+  @UseGuards(JwtAuthGuard)
+  @Throttle(3, 60)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Verify current password',
+    description:
+      'Verifies the authenticated user\'s password without creating a new session. ' +
+      'No tokens are issued, no cookies are set. ' +
+      'Rate limited to 3 requests per minute.',
+  })
+  @ApiBody({ type: VerifyPasswordDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Password is correct',
+  })
+  @ApiResponse({ status: 401, description: 'Invalid password or unauthorized' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  async verifyPassword(
+    @CurrentUser() user: UserPayload,
+    @Body() dto: VerifyPasswordDto,
+    @Req() req: Request,
+  ): Promise<{ valid: boolean }> {
+    try {
+      await this.authService.verifyPassword(user.sub, dto.password);
+      this.auditService.log({
+        userId: user.sub,
+        action: 'PASSWORD_VERIFY',
+        resourceType: 'User',
+        resourceId: user.sub,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] as string,
+      });
+      return { valid: true };
+    } catch (e) {
+      this.auditService.log({
+        userId: user.sub,
+        action: 'PASSWORD_VERIFY_FAILED',
+        resourceType: 'User',
+        resourceId: user.sub,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'] as string,
+      });
+      throw e;
+    }
   }
 
   /**

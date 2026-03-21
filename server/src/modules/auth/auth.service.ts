@@ -1,5 +1,6 @@
 import {
   Injectable,
+  NotFoundException,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
@@ -229,6 +230,36 @@ export class AuthService {
     }
 
     this.logger.log(`User logged out: ${userId}`);
+  }
+
+  /**
+   * Verifies the current user's password without issuing tokens.
+   * Used for sensitive operations (account deletion, etc.).
+   *
+   * @param userId - The user's ID from the JWT token
+   * @param password - The plaintext password to verify
+   * @returns true if the password matches
+   * @throws UnauthorizedException if the password is incorrect or user not found
+   */
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      // Perform a dummy bcrypt compare to prevent timing-based user enumeration
+      await bcrypt.compare(password, '$2b$10$DJDV.tzDrvTB4I6budHOk.o3SL.IpId0e2EFLVk5YlipVIbp3hcw.');
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
+
+    if (!isValid) {
+      this.logger.warn(`Failed password verification for user: ${userId}`);
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    return true;
   }
 
   /**

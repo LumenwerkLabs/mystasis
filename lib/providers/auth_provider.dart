@@ -206,6 +206,41 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Update data sharing consent preferences.
+  Future<bool> updateConsent({
+    bool? shareWithClinician,
+    bool? anonymousResearch,
+  }) async {
+    if (_user == null) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final updated = await _usersService.updateUser(
+        _user!.id,
+        shareWithClinician: shareWithClinician,
+        anonymousResearch: anonymousResearch,
+      );
+      _user = updated;
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on NetworkException {
+      _errorMessage = 'Unable to connect. Please check your network.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    } catch (e) {
+      debugPrint('Failed to update consent');
+      _errorMessage = 'Failed to update preferences.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   /// Change the current user's password.
   /// Requires [currentPassword] for verification before setting [newPassword].
   Future<bool> changePassword(String currentPassword, String newPassword) async {
@@ -256,7 +291,6 @@ class AuthProvider extends ChangeNotifier {
     // Verify password without creating a new session
     try {
       final isValid = await _authService.verifyPassword(
-        email: _user!.email,
         password: password,
       );
       if (!isValid) {

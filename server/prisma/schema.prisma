@@ -20,9 +20,11 @@ model User {
   lastName  String?
   birthdate DateTime
   role      UserRole @default(PATIENT)
-  clinicId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  clinicId           String?
+  shareWithClinician Boolean  @default(true)
+  anonymousResearch  Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   clinic               Clinic?          @relation(fields: [clinicId], references: [id])
   biomarkerValues      BiomarkerValue[]
@@ -333,4 +335,26 @@ model Clinic {
   users User[]
 
   @@index([name])
+}
+
+// HIPAA-compliant audit log for PHI access and consent changes.
+// No FK to User — audit logs must survive user deletion per HIPAA retention.
+// IMPORTANT: Consider adding database-level row security policies to prevent
+// UPDATE/DELETE on this table for HIPAA immutability requirements.
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String
+  action       String   // e.g., "PHI_ACCESS", "CONSENT_CHANGE", "PASSWORD_VERIFY"
+  resourceType String   // e.g., "BiomarkerValue", "Alert", "Anamnesis", "User"
+  resourceId   String?  // ID of the accessed resource (nullable for list endpoints)
+  metadata     Json?    // Non-PHI context: { method, path, statusCode }
+  ipAddress    String?
+  userAgent    String?
+  timestamp    DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([timestamp])
+  @@index([userId, timestamp])
 }

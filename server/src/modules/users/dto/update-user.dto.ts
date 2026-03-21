@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsOptional,
   IsString,
   MinLength,
@@ -84,4 +85,26 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString({ message: 'Current password must be a string' })
   currentPassword?: string;
+
+  /**
+   * Whether to share health data with the user's clinician.
+   */
+  @ApiPropertyOptional({
+    description: 'Allow clinician to view health data',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'shareWithClinician must be a boolean' })
+  shareWithClinician?: boolean;
+
+  /**
+   * Whether to contribute anonymized data to research.
+   */
+  @ApiPropertyOptional({
+    description: 'Contribute anonymized data to longevity research',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'anonymousResearch must be a boolean' })
+  anonymousResearch?: boolean;
 }

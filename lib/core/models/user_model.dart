@@ -7,6 +7,8 @@ class UserModel {
   final DateTime? birthdate;
   final String role;
   final String? clinicId;
+  final bool shareWithClinician;
+  final bool anonymousResearch;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -18,6 +20,8 @@ class UserModel {
     this.firstName,
     this.lastName,
     this.clinicId,
+    this.shareWithClinician = true,
+    this.anonymousResearch = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -59,6 +63,8 @@ class UserModel {
       firstName: json['firstName'] as String?,
       lastName: json['lastName'] as String?,
       clinicId: json['clinicId'] as String?,
+      shareWithClinician: json['shareWithClinician'] as bool? ?? true,
+      anonymousResearch: json['anonymousResearch'] as bool? ?? false,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : null,
@@ -78,6 +84,8 @@ class UserModel {
       'firstName': firstName,
       'lastName': lastName,
       'clinicId': clinicId,
+      'shareWithClinician': shareWithClinician,
+      'anonymousResearch': anonymousResearch,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -92,6 +100,8 @@ class UserModel {
     DateTime? birthdate,
     String? role,
     String? clinicId,
+    bool? shareWithClinician,
+    bool? anonymousResearch,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -103,6 +113,8 @@ class UserModel {
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,
       clinicId: clinicId ?? this.clinicId,
+      shareWithClinician: shareWithClinician ?? this.shareWithClinician,
+      anonymousResearch: anonymousResearch ?? this.anonymousResearch,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -118,12 +130,15 @@ class UserModel {
         other.lastName == lastName &&
         other.birthdate == birthdate &&
         other.role == role &&
-        other.clinicId == clinicId;
+        other.clinicId == clinicId &&
+        other.shareWithClinician == shareWithClinician &&
+        other.anonymousResearch == anonymousResearch;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, email, firstName, lastName, birthdate, role, clinicId);
+    return Object.hash(id, email, firstName, lastName, birthdate, role,
+        clinicId, shareWithClinician, anonymousResearch);
   }
 
   @override

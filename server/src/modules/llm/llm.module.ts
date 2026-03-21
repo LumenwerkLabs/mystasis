@@ -4,6 +4,7 @@ import { LlmService, HTTP_SERVICE_TOKEN } from './llm.service';
 import { LlmController } from './llm.controller';
 import { HealthDataModule } from '../health-data/health-data.module';
 import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module';
 import { OpenMedModule } from '../openmed/openmed.module';
 
 /**
@@ -27,7 +28,7 @@ import { OpenMedModule } from '../openmed/openmed.module';
  * - llm.model: LLM model identifier (e.g., 'gpt-4')
  */
 @Module({
-  imports: [HttpModule, HealthDataModule, AuthModule, OpenMedModule],
+  imports: [HttpModule, HealthDataModule, AuthModule, UsersModule, OpenMedModule],
   controllers: [LlmController],
   providers: [
     LlmService,

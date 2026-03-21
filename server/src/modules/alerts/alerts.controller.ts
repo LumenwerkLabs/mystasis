@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { UserRole } from '../../generated/prisma/client';
 import { AlertsService } from './alerts.service';
+import { UsersService } from '../users/users.service';
 import { CreateAlertDto } from './dto/create-alert.dto';
 import { GetAlertsQueryDto } from './dto/get-alerts-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -26,6 +27,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Controller for managing health alerts.
@@ -43,22 +45,35 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @ApiBearerAuth('JWT-auth')
 @Controller('alerts')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@AuditPhi('Alert')
 export class AlertsController {
-  constructor(private readonly alertsService: AlertsService) {}
+  constructor(
+    private readonly alertsService: AlertsService,
+    private readonly usersService: UsersService,
+  ) {}
 
   /**
-   * Validates that a patient can only access their own data.
-   *
-   * @param userId - The ID of the user whose data is being accessed
-   * @param currentUser - The authenticated user making the request
-   * @throws {ForbiddenException} When patient tries to access another user's data
+   * Validates access to a user's alerts.
+   * - Patients can only access their own data.
+   * - Clinicians are blocked if the patient has set shareWithClinician=false.
    */
-  private validatePatientAccess(
+  private async validateDataAccess(
     userId: string,
     currentUser: UserPayload,
-  ): void {
+  ): Promise<void> {
     if (currentUser.role === UserRole.PATIENT && userId !== currentUser.sub) {
       throw new ForbiddenException('You can only access your own alerts');
+    }
+    if (currentUser.role === UserRole.CLINICIAN && userId !== currentUser.sub) {
+      const targetUser = await this.usersService.findOne(userId);
+      if (targetUser.clinicId !== currentUser.clinicId) {
+        throw new ForbiddenException('Patient is not in your clinic');
+      }
+      if (!targetUser.shareWithClinician) {
+        throw new ForbiddenException(
+          'This patient has not consented to clinician data sharing',
+        );
+      }
     }
   }
 
@@ -133,7 +148,7 @@ export class AlertsController {
     @Query() query: GetAlertsQueryDto,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(userId, user);
+    await this.validateDataAccess(userId, user);
 
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
@@ -192,7 +207,7 @@ export class AlertsController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(userId, user);
+    await this.validateDataAccess(userId, user);
 
     return this.alertsService.getActiveAlerts(userId);
   }

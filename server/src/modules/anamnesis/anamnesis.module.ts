@@ -4,9 +4,10 @@ import { AnamnesisController } from './anamnesis.controller';
 import { AnamnesisService } from './anamnesis.service';
 import { HTTP_SERVICE_TOKEN } from './anamnesis.constants';
 import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
-  imports: [AuthModule, HttpModule],
+  imports: [AuthModule, UsersModule, HttpModule],
   controllers: [AnamnesisController],
   providers: [
     AnamnesisService,

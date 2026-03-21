@@ -1,11 +1,13 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ConflictException,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { Prisma, UserRole, User } from '../../generated/prisma/client';
 import * as bcrypt from 'bcrypt';
 
@@ -54,10 +56,14 @@ function excludePassword(user: User): UserWithoutPassword {
  */
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
   /** Number of bcrypt salt rounds for password hashing */
   private readonly SALT_ROUNDS = 10;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   /**
    * Creates a new user with a securely hashed password.
@@ -239,6 +245,8 @@ export class UsersService {
       firstName?: string;
       lastName?: string;
       role?: UserRole;
+      shareWithClinician?: boolean;
+      anonymousResearch?: boolean;
     },
   ): Promise<UserWithoutPassword> {
     // Check if user exists
@@ -264,6 +272,36 @@ export class UsersService {
       if (!isCurrentPasswordValid) {
         throw new UnauthorizedException('Current password is incorrect');
       }
+    }
+
+    // Audit log consent changes before updating
+    if (data.shareWithClinician !== undefined &&
+        data.shareWithClinician !== existingUser.shareWithClinician) {
+      this.auditService.log({
+        userId: id,
+        action: 'CONSENT_CHANGE',
+        resourceType: 'User',
+        resourceId: id,
+        metadata: {
+          field: 'shareWithClinician',
+          oldValue: existingUser.shareWithClinician,
+          newValue: data.shareWithClinician,
+        },
+      });
+    }
+    if (data.anonymousResearch !== undefined &&
+        data.anonymousResearch !== existingUser.anonymousResearch) {
+      this.auditService.log({
+        userId: id,
+        action: 'CONSENT_CHANGE',
+        resourceType: 'User',
+        resourceId: id,
+        metadata: {
+          field: 'anonymousResearch',
+          oldValue: existingUser.anonymousResearch,
+          newValue: data.anonymousResearch,
+        },
+      });
     }
 
     // Build update data, excluding currentPassword (not a DB field)

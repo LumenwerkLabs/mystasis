@@ -30,6 +30,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Date range options for analytics queries.
@@ -78,6 +79,7 @@ interface DateRangeOptions {
 @ApiBearerAuth('JWT-auth')
 @Controller('analytics')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@AuditPhi('Analytics')
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 

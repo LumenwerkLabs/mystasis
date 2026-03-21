@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import { UserRole } from '../../generated/prisma/client';
 import { AnamnesisService } from './anamnesis.service';
+import { UsersService } from '../users/users.service';
 import { CreateAnamnesisDto } from './dto/create-anamnesis.dto';
 import { UpdateAnamnesisDto } from './dto/update-anamnesis.dto';
 import { GetAnamnesesQueryDto } from './dto/get-anamneses-query.dto';
@@ -29,6 +30,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Controller for managing structured clinical anamnesis records.
@@ -47,16 +49,22 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @ApiBearerAuth('JWT-auth')
 @Controller('anamnesis')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@AuditPhi('Anamnesis')
 export class AnamnesisController {
-  constructor(private readonly anamnesisService: AnamnesisService) {}
+  constructor(
+    private readonly anamnesisService: AnamnesisService,
+    private readonly usersService: UsersService,
+  ) {}
 
   /**
-   * Validates that a patient can only access their own data.
+   * Validates access to anamnesis data.
+   * - Patients can only access their own data.
+   * - Clinicians are blocked if the patient has set shareWithClinician=false.
    */
-  private validatePatientAccess(
+  private async validateDataAccess(
     patientId: string,
     currentUser: UserPayload,
-  ): void {
+  ): Promise<void> {
     if (
       currentUser.role === UserRole.PATIENT &&
       patientId !== currentUser.sub
@@ -64,6 +72,17 @@ export class AnamnesisController {
       throw new ForbiddenException(
         'You can only access your own anamnesis records',
       );
+    }
+    if (currentUser.role === UserRole.CLINICIAN && patientId !== currentUser.sub) {
+      const targetUser = await this.usersService.findOne(patientId);
+      if (targetUser.clinicId !== currentUser.clinicId) {
+        throw new ForbiddenException('Patient is not in your clinic');
+      }
+      if (!targetUser.shareWithClinician) {
+        throw new ForbiddenException(
+          'This patient has not consented to clinician data sharing',
+        );
+      }
     }
   }
 
@@ -89,6 +108,7 @@ export class AnamnesisController {
     @Body() dto: CreateAnamnesisDto,
     @CurrentUser() user: UserPayload,
   ) {
+    await this.validateDataAccess(dto.patientId, user);
     return this.anamnesisService.create({
       patientId: dto.patientId,
       clinicianId: user.sub,
@@ -155,7 +175,7 @@ export class AnamnesisController {
     @Query() query: GetAnamnesesQueryDto,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(patientId, user);
+    await this.validateDataAccess(patientId, user);
 
     return this.anamnesisService.findAllForPatient(patientId, {
       startDate: query.startDate ? new Date(query.startDate) : undefined,
@@ -191,7 +211,7 @@ export class AnamnesisController {
     @CurrentUser() user: UserPayload,
   ) {
     const anamnesis = await this.anamnesisService.findOne(id);
-    this.validatePatientAccess(anamnesis.patientId, user);
+    await this.validateDataAccess(anamnesis.patientId, user);
     return anamnesis;
   }
 

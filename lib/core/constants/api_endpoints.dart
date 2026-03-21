@@ -30,6 +30,7 @@ class ApiEndpoints {
   static const String logout = '/auth/logout';
   static const String refresh = '/auth/refresh';
   static const String me = '/auth/me';
+  static const String verifyPassword = '/auth/verify-password';
 
   // Health data endpoints
   static const String biomarkers = '/health-data/biomarkers';

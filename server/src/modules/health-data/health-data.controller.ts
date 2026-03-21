@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { BiomarkerType, UserRole } from '../../generated/prisma/client';
 import { HealthDataService } from './health-data.service';
+import { UsersService } from '../users/users.service';
 import { CreateBiomarkerDto } from './dto/create-biomarker.dto';
 import { WearableSyncDto } from './dto/wearable-sync.dto';
 import { PatientSyncDto } from './dto/patient-sync.dto';
@@ -31,6 +32,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Throttle } from '../../common/decorators/throttle.decorator';
 import { UserPayload } from '../../common/interfaces/user-payload.interface';
+import { AuditPhi } from '../audit/audit.decorator';
 
 /**
  * Controller for managing health data biomarkers.
@@ -48,22 +50,35 @@ import { UserPayload } from '../../common/interfaces/user-payload.interface';
 @ApiBearerAuth('JWT-auth')
 @Controller('health-data')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@AuditPhi('BiomarkerValue')
 export class HealthDataController {
-  constructor(private readonly healthDataService: HealthDataService) {}
+  constructor(
+    private readonly healthDataService: HealthDataService,
+    private readonly usersService: UsersService,
+  ) {}
 
   /**
-   * Validates that a patient can only access their own data.
-   *
-   * @param userId - The ID of the user whose data is being accessed
-   * @param currentUser - The authenticated user making the request
-   * @throws {ForbiddenException} When patient tries to access another user's data
+   * Validates access to a user's health data.
+   * - Patients can only access their own data.
+   * - Clinicians are blocked if the patient has set shareWithClinician=false.
    */
-  private validatePatientAccess(
+  private async validateDataAccess(
     userId: string,
     currentUser: UserPayload,
-  ): void {
+  ): Promise<void> {
     if (currentUser.role === UserRole.PATIENT && userId !== currentUser.sub) {
       throw new ForbiddenException('You can only access your own health data');
+    }
+    if (currentUser.role === UserRole.CLINICIAN && userId !== currentUser.sub) {
+      const targetUser = await this.usersService.findOne(userId);
+      if (targetUser.clinicId !== currentUser.clinicId) {
+        throw new ForbiddenException('Patient is not in your clinic');
+      }
+      if (!targetUser.shareWithClinician) {
+        throw new ForbiddenException(
+          'This patient has not consented to clinician data sharing',
+        );
+      }
     }
   }
 
@@ -114,7 +129,7 @@ export class HealthDataController {
     @Query() query: GetBiomarkersQueryDto,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(userId, user);
+    await this.validateDataAccess(userId, user);
 
     return this.healthDataService.findAll(userId, {
       type: query.type,
@@ -333,7 +348,7 @@ export class HealthDataController {
     @Param('type', new ParseEnumPipe(BiomarkerType)) type: BiomarkerType,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(userId, user);
+    await this.validateDataAccess(userId, user);
 
     return this.healthDataService.findLatest(userId, type);
   }
@@ -393,7 +408,7 @@ export class HealthDataController {
     @Query() query: GetTrendQueryDto,
     @CurrentUser() user: UserPayload,
   ) {
-    this.validatePatientAccess(userId, user);
+    await this.validateDataAccess(userId, user);
 
     return this.healthDataService.getTrend(
       userId,

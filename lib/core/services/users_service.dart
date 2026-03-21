@@ -48,12 +48,16 @@ class UsersService {
     String? lastName,
     String? password,
     String? currentPassword,
+    bool? shareWithClinician,
+    bool? anonymousResearch,
   }) async {
     final body = <String, dynamic>{};
     if (firstName != null) body['firstName'] = firstName;
     if (lastName != null) body['lastName'] = lastName;
     if (password != null) body['password'] = password;
     if (currentPassword != null) body['currentPassword'] = currentPassword;
+    if (shareWithClinician != null) body['shareWithClinician'] = shareWithClinician;
+    if (anonymousResearch != null) body['anonymousResearch'] = anonymousResearch;
 
     final response =
         await _apiClient.patch(ApiEndpoints.userById(id), body: body);
