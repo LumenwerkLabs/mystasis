@@ -7,6 +7,7 @@ import 'package:mystasis/core/widgets/medical_disclaimer.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
+import 'package:mystasis/core/services/homeostasis_score_service.dart';
 import 'package:mystasis/screens/dashboard/widgets/alerts_card.dart';
 
 class OverviewScreen extends StatelessWidget {
@@ -224,129 +225,154 @@ class _StatCard extends StatelessWidget {
 class _HomeostasisScoreCard extends StatelessWidget {
   const _HomeostasisScoreCard();
 
+  static const _categoryColors = {
+    'Metabolic': MystasisTheme.deepBioTeal,
+    'Cardiovascular': MystasisTheme.softAlgae,
+    'Inflammatory': MystasisTheme.cellularBlue,
+    'Hormonal': MystasisTheme.signalAmber,
+  };
+
+  static final _scoreService = HomeostasisScoreService();
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        final score = _scoreService.compute(provider.latestByType);
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Homeostasis Score',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: MystasisTheme.signalAmber.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Coming Soon',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: MystasisTheme.signalAmber,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              // Score circle
-              Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      MystasisTheme.deepBioTeal,
-                      MystasisTheme.softAlgae,
-                    ],
-                  ),
-                ),
-                child: Center(
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '78',
-                          style: Theme.of(context).textTheme.headlineLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: MystasisTheme.deepBioTeal,
-                              ),
-                        ),
-                        Text(
-                          'Good',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: MystasisTheme.softAlgae),
-                        ),
-                      ],
+              const SizedBox(height: 24),
+              if (!score.hasData)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Center(
+                    child: Text(
+                      'Insufficient biomarker data to compute score.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: MystasisTheme.neutralGrey,
+                          ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 32),
-              // Breakdown
-              Expanded(
-                child: Column(
+                )
+              else ...[
+                Row(
                   children: [
-                    _ScoreBreakdownItem(
-                      label: 'Metabolic',
-                      score: 82,
-                      color: MystasisTheme.deepBioTeal,
+                    // Score circle
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            MystasisTheme.deepBioTeal,
+                            MystasisTheme.softAlgae,
+                          ],
+                        ),
+                      ),
+                      child: Center(
+                        child: Container(
+                          width: 100,
+                          height: 100,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                '${score.overallScore.round()}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: MystasisTheme.deepBioTeal,
+                                    ),
+                              ),
+                              Text(
+                                score.status,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: MystasisTheme.softAlgae),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    _ScoreBreakdownItem(
-                      label: 'Cardiovascular',
-                      score: 75,
-                      color: MystasisTheme.softAlgae,
-                    ),
-                    const SizedBox(height: 12),
-                    _ScoreBreakdownItem(
-                      label: 'Inflammatory',
-                      score: 71,
-                      color: MystasisTheme.cellularBlue,
-                    ),
-                    const SizedBox(height: 12),
-                    _ScoreBreakdownItem(
-                      label: 'Hormonal',
-                      score: 84,
-                      color: MystasisTheme.signalAmber,
+                    const SizedBox(width: 32),
+                    // Category breakdown
+                    Expanded(
+                      child: Column(
+                        children: [
+                          for (final category
+                              in HomeostasisScoreService.scoredCategories)
+                            if (score.categories.containsKey(category)) ...[
+                              _ScoreBreakdownItem(
+                                label: category,
+                                score: score.categories[category]!.score.round(),
+                                color: _categoryColors[category] ??
+                                    MystasisTheme.neutralGrey,
+                                biomarkerCount:
+                                    score.categories[category]!.biomarkerCount,
+                              ),
+                              const SizedBox(height: 12),
+                            ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
+                // Medical disclaimer
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 14, color: MystasisTheme.neutralGrey),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'This score is a statistical summary, not a clinical assessment. '
+                        'Individual biomarker values should be reviewed independently.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: MystasisTheme.neutralGrey,
+                              fontStyle: FontStyle.italic,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -355,20 +381,27 @@ class _ScoreBreakdownItem extends StatelessWidget {
   final String label;
   final int score;
   final Color color;
+  final int? biomarkerCount;
 
   const _ScoreBreakdownItem({
     required this.label,
     required this.score,
     required this.color,
+    this.biomarkerCount,
   });
 
   @override
   Widget build(BuildContext context) {
+    final displayLabel = biomarkerCount != null && biomarkerCount! < 3
+        ? '$label ($biomarkerCount marker${biomarkerCount == 1 ? '' : 's'})'
+        : label;
+
     return Row(
       children: [
         SizedBox(
           width: 100,
-          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+          child:
+              Text(displayLabel, style: Theme.of(context).textTheme.bodySmall),
         ),
         Expanded(
           child: ClipRRect(
