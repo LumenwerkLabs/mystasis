@@ -272,12 +272,23 @@ export class UsersController {
   ): Promise<UserWithoutPassword> {
     await this.fetchUserWithAccessCheck(id, user);
 
-    // Only the user themselves can change their consent preferences
+    // Only the user themselves can change their consent/notification preferences
     if (user.sub !== id && user.id !== id) {
-      const { shareWithClinician, anonymousResearch, ...safeUpdate } =
-        updateUserDto;
+      const {
+        shareWithClinician,
+        anonymousResearch,
+        notifyLabResults,
+        notifyAppointments,
+        notifyHealthAlerts,
+        notifyWeeklyDigest,
+        ...safeUpdate
+      } = updateUserDto;
       void shareWithClinician;
       void anonymousResearch;
+      void notifyLabResults;
+      void notifyAppointments;
+      void notifyHealthAlerts;
+      void notifyWeeklyDigest;
       return this.usersService.update(id, safeUpdate);
     }
 

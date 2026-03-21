@@ -247,6 +247,10 @@ export class UsersService {
       role?: UserRole;
       shareWithClinician?: boolean;
       anonymousResearch?: boolean;
+      notifyLabResults?: boolean;
+      notifyAppointments?: boolean;
+      notifyHealthAlerts?: boolean;
+      notifyWeeklyDigest?: boolean;
     },
   ): Promise<UserWithoutPassword> {
     // Check if user exists
@@ -302,6 +306,30 @@ export class UsersService {
           newValue: data.anonymousResearch,
         },
       });
+    }
+
+    // Audit log notification preference changes
+    const notifFields = [
+      'notifyLabResults',
+      'notifyAppointments',
+      'notifyHealthAlerts',
+      'notifyWeeklyDigest',
+    ] as const;
+    for (const field of notifFields) {
+      if (data[field] !== undefined &&
+          data[field] !== (existingUser as Record<string, unknown>)[field]) {
+        this.auditService.log({
+          userId: id,
+          action: 'PREFERENCE_CHANGE',
+          resourceType: 'User',
+          resourceId: id,
+          metadata: {
+            field,
+            oldValue: (existingUser as Record<string, unknown>)[field],
+            newValue: data[field],
+          },
+        });
+      }
     }
 
     // Build update data, excluding currentPassword (not a DB field)

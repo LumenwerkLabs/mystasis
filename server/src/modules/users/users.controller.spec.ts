@@ -45,7 +45,7 @@ interface UserPayload {
   clinicId?: string;
 }
 
-// Define SafeUser interface (without password field)
+// Define SafeUser interface (without password field, matches Prisma User minus password)
 interface SafeUser {
   id: string;
   email: string;
@@ -54,14 +54,28 @@ interface SafeUser {
   birthdate: Date;
   role: UserRole;
   clinicId: string | null;
+  shareWithClinician: boolean;
+  anonymousResearch: boolean;
+  notifyLabResults: boolean;
+  notifyAppointments: boolean;
+  notifyHealthAlerts: boolean;
+  notifyWeeklyDigest: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Define UpdateUserDto interface
+// Define UpdateUserDto interface (matches real DTO)
 interface UpdateUserDto {
   firstName?: string;
   lastName?: string;
+  password?: string;
+  currentPassword?: string;
+  shareWithClinician?: boolean;
+  anonymousResearch?: boolean;
+  notifyLabResults?: boolean;
+  notifyAppointments?: boolean;
+  notifyHealthAlerts?: boolean;
+  notifyWeeklyDigest?: boolean;
 }
 
 // Define paginated response interface
@@ -130,6 +144,12 @@ describe('UsersController', () => {
     birthdate: new Date('1990-01-15'),
     role: UserRole.PATIENT,
     clinicId: 'clinic-uuid-1',
+    shareWithClinician: true,
+    anonymousResearch: false,
+    notifyLabResults: true,
+    notifyAppointments: true,
+    notifyHealthAlerts: true,
+    notifyWeeklyDigest: false,
     createdAt: new Date('2024-01-01T10:00:00Z'),
     updatedAt: new Date('2024-01-01T10:00:00Z'),
   };
@@ -544,6 +564,129 @@ describe('UsersController', () => {
         await expect(
           controller.update('patient-uuid-3', updateDto, mockClinician),
         ).rejects.toThrow(ForbiddenException);
+      });
+    });
+
+    describe('preference stripping', () => {
+      it('should allow patient to update their own consent preferences', async () => {
+        // Arrange
+        const dtoWithConsent: UpdateUserDto = {
+          firstName: 'Updated',
+          shareWithClinician: false,
+          anonymousResearch: true,
+        };
+        const updatedUser: SafeUser = { ...mockSafeUser, firstName: 'Updated' };
+        mockUsersService.update.mockResolvedValue(updatedUser);
+
+        // Act
+        await controller.update(mockPatient.id, dtoWithConsent, mockPatient);
+
+        // Assert - service should receive consent fields
+        expect(mockUsersService.update).toHaveBeenCalledWith(
+          mockPatient.id,
+          expect.objectContaining({
+            shareWithClinician: false,
+            anonymousResearch: true,
+          }),
+        );
+      });
+
+      it('should allow patient to update their own notification preferences', async () => {
+        // Arrange
+        const dtoWithNotifs: UpdateUserDto = {
+          notifyLabResults: false,
+          notifyWeeklyDigest: true,
+        };
+        const updatedUser: SafeUser = { ...mockSafeUser };
+        mockUsersService.update.mockResolvedValue(updatedUser);
+
+        // Act
+        await controller.update(mockPatient.id, dtoWithNotifs, mockPatient);
+
+        // Assert - service should receive notification fields
+        expect(mockUsersService.update).toHaveBeenCalledWith(
+          mockPatient.id,
+          expect.objectContaining({
+            notifyLabResults: false,
+            notifyWeeklyDigest: true,
+          }),
+        );
+      });
+
+      it('should strip consent preferences when clinician updates patient', async () => {
+        // Arrange
+        const dtoWithConsent: UpdateUserDto = {
+          firstName: 'Clinician Updated',
+          shareWithClinician: true, // Clinician trying to override
+          anonymousResearch: true,
+        };
+        mockUsersService.findOne.mockResolvedValue(mockSafeUser);
+        const updatedUser: SafeUser = {
+          ...mockSafeUser,
+          firstName: 'Clinician Updated',
+        };
+        mockUsersService.update.mockResolvedValue(updatedUser);
+
+        // Act
+        await controller.update('patient-uuid-1', dtoWithConsent, mockClinician);
+
+        // Assert - service should NOT receive consent fields
+        const updateCall = mockUsersService.update.mock.calls[0];
+        expect(updateCall[1]).not.toHaveProperty('shareWithClinician');
+        expect(updateCall[1]).not.toHaveProperty('anonymousResearch');
+        // But should still receive the name update
+        expect(updateCall[1]).toHaveProperty('firstName', 'Clinician Updated');
+      });
+
+      it('should strip notification preferences when clinician updates patient', async () => {
+        // Arrange
+        const dtoWithNotifs: UpdateUserDto = {
+          firstName: 'Clinician Updated',
+          notifyLabResults: false,
+          notifyAppointments: false,
+          notifyHealthAlerts: false,
+          notifyWeeklyDigest: true,
+        };
+        mockUsersService.findOne.mockResolvedValue(mockSafeUser);
+        const updatedUser: SafeUser = {
+          ...mockSafeUser,
+          firstName: 'Clinician Updated',
+        };
+        mockUsersService.update.mockResolvedValue(updatedUser);
+
+        // Act
+        await controller.update('patient-uuid-1', dtoWithNotifs, mockClinician);
+
+        // Assert - service should NOT receive notification fields
+        const updateCall = mockUsersService.update.mock.calls[0];
+        expect(updateCall[1]).not.toHaveProperty('notifyLabResults');
+        expect(updateCall[1]).not.toHaveProperty('notifyAppointments');
+        expect(updateCall[1]).not.toHaveProperty('notifyHealthAlerts');
+        expect(updateCall[1]).not.toHaveProperty('notifyWeeklyDigest');
+        // But should still receive the name update
+        expect(updateCall[1]).toHaveProperty('firstName', 'Clinician Updated');
+      });
+
+      it('should strip all preference fields when clinician sends only preferences', async () => {
+        // Arrange - clinician sends only consent/notification fields, no profile fields
+        const prefsOnlyDto: UpdateUserDto = {
+          shareWithClinician: true,
+          anonymousResearch: true,
+          notifyLabResults: false,
+          notifyAppointments: false,
+          notifyHealthAlerts: false,
+          notifyWeeklyDigest: true,
+        };
+        mockUsersService.findOne.mockResolvedValue(mockSafeUser);
+        mockUsersService.update.mockResolvedValue(mockSafeUser);
+
+        // Act
+        await controller.update('patient-uuid-1', prefsOnlyDto, mockClinician);
+
+        // Assert - service should receive an empty object (all fields stripped)
+        const updateCall = mockUsersService.update.mock.calls[0];
+        const updateData = updateCall[1];
+        expect(Object.keys(updateData)).toHaveLength(0);
       });
     });
 

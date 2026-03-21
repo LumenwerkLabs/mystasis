@@ -107,4 +107,36 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean({ message: 'anonymousResearch must be a boolean' })
   anonymousResearch?: boolean;
+
+  /**
+   * Notify when new lab results are available.
+   */
+  @ApiPropertyOptional({ description: 'Notify on new lab results', example: true })
+  @IsOptional()
+  @IsBoolean({ message: 'notifyLabResults must be a boolean' })
+  notifyLabResults?: boolean;
+
+  /**
+   * Remind about upcoming appointments.
+   */
+  @ApiPropertyOptional({ description: 'Appointment reminders', example: true })
+  @IsOptional()
+  @IsBoolean({ message: 'notifyAppointments must be a boolean' })
+  notifyAppointments?: boolean;
+
+  /**
+   * Notify on critical biomarker alerts.
+   */
+  @ApiPropertyOptional({ description: 'Critical biomarker notifications', example: true })
+  @IsOptional()
+  @IsBoolean({ message: 'notifyHealthAlerts must be a boolean' })
+  notifyHealthAlerts?: boolean;
+
+  /**
+   * Send weekly health data digest.
+   */
+  @ApiPropertyOptional({ description: 'Weekly health data summary', example: false })
+  @IsOptional()
+  @IsBoolean({ message: 'notifyWeeklyDigest must be a boolean' })
+  notifyWeeklyDigest?: boolean;
 }

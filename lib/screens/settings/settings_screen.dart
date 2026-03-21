@@ -724,50 +724,55 @@ class _ProfileField extends StatelessWidget {
   }
 }
 
-class _NotificationsCard extends StatefulWidget {
+class _NotificationsCard extends StatelessWidget {
   const _NotificationsCard();
 
   @override
-  State<_NotificationsCard> createState() => _NotificationsCardState();
-}
-
-class _NotificationsCardState extends State<_NotificationsCard> {
-  bool _labResults = true;
-  bool _appointments = true;
-  bool _healthAlerts = true;
-  bool _weeklyDigest = false;
-
-  @override
   Widget build(BuildContext context) {
-    return _SettingsCard(
-      title: 'Notifications',
-      icon: Icons.notifications_outlined,
-      children: [
-        _ToggleSetting(
-          label: 'Lab Results',
-          description: 'Notify when new results are available',
-          value: _labResults,
-          onChanged: (v) => setState(() => _labResults = v),
-        ),
-        _ToggleSetting(
-          label: 'Appointments',
-          description: 'Reminders for upcoming appointments',
-          value: _appointments,
-          onChanged: (v) => setState(() => _appointments = v),
-        ),
-        _ToggleSetting(
-          label: 'Health Alerts',
-          description: 'Critical biomarker notifications',
-          value: _healthAlerts,
-          onChanged: (v) => setState(() => _healthAlerts = v),
-        ),
-        _ToggleSetting(
-          label: 'Weekly Digest',
-          description: 'Summary of weekly health data',
-          value: _weeklyDigest,
-          onChanged: (v) => setState(() => _weeklyDigest = v),
-        ),
-      ],
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final user = auth.user;
+        if (user == null) return const SizedBox.shrink();
+
+        return _SettingsCard(
+          title: 'Notifications',
+          icon: Icons.notifications_outlined,
+          children: [
+            _ToggleSetting(
+              label: 'Lab Results',
+              description: 'Notify when new results are available',
+              value: user.notifyLabResults,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateNotifications(notifyLabResults: v),
+            ),
+            _ToggleSetting(
+              label: 'Appointments',
+              description: 'Reminders for upcoming appointments',
+              value: user.notifyAppointments,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateNotifications(notifyAppointments: v),
+            ),
+            _ToggleSetting(
+              label: 'Health Alerts',
+              description: 'Critical biomarker notifications',
+              value: user.notifyHealthAlerts,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateNotifications(notifyHealthAlerts: v),
+            ),
+            _ToggleSetting(
+              label: 'Weekly Digest',
+              description: 'Summary of weekly health data',
+              value: user.notifyWeeklyDigest,
+              onChanged: auth.isLoading
+                  ? null
+                  : (v) => auth.updateNotifications(notifyWeeklyDigest: v),
+            ),
+          ],
+        );
+      },
     );
   }
 }

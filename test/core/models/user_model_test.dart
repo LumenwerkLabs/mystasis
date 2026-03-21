@@ -596,6 +596,88 @@ void main() {
       });
     });
 
+    group('preference fields', () {
+      test('should parse notification preferences from JSON', () {
+        final json = {
+          'id': 'user_123',
+          'email': 'test@example.com',
+          'role': 'patient',
+          'notifyLabResults': false,
+          'notifyAppointments': false,
+          'notifyHealthAlerts': true,
+          'notifyWeeklyDigest': true,
+          'shareWithClinician': false,
+          'anonymousResearch': true,
+        };
+        final user = UserModel.fromJson(json);
+        expect(user.notifyLabResults, isFalse);
+        expect(user.notifyAppointments, isFalse);
+        expect(user.notifyHealthAlerts, isTrue);
+        expect(user.notifyWeeklyDigest, isTrue);
+        expect(user.shareWithClinician, isFalse);
+        expect(user.anonymousResearch, isTrue);
+      });
+
+      test('should use defaults when preference fields are missing from JSON', () {
+        final json = {
+          'id': 'user_123',
+          'email': 'test@example.com',
+          'role': 'patient',
+        };
+        final user = UserModel.fromJson(json);
+        expect(user.notifyLabResults, isTrue);
+        expect(user.notifyAppointments, isTrue);
+        expect(user.notifyHealthAlerts, isTrue);
+        expect(user.notifyWeeklyDigest, isFalse);
+        expect(user.shareWithClinician, isTrue);
+        expect(user.anonymousResearch, isFalse);
+      });
+
+      test('should roundtrip preference fields through toJson/fromJson', () {
+        final original = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          role: 'patient',
+          notifyLabResults: false,
+          notifyWeeklyDigest: true,
+          shareWithClinician: false,
+        );
+        final json = original.toJson();
+        final restored = UserModel.fromJson(json);
+        expect(restored.notifyLabResults, equals(original.notifyLabResults));
+        expect(restored.notifyWeeklyDigest, equals(original.notifyWeeklyDigest));
+        expect(restored.shareWithClinician, equals(original.shareWithClinician));
+      });
+
+      test('should include preferences in equality check', () {
+        final user1 = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          role: 'patient',
+          notifyLabResults: true,
+        );
+        final user2 = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          role: 'patient',
+          notifyLabResults: false,
+        );
+        expect(user1, isNot(equals(user2)));
+      });
+
+      test('should copy preference fields with copyWith', () {
+        final original = UserModel(
+          id: 'user_123',
+          email: 'test@example.com',
+          role: 'patient',
+          notifyLabResults: true,
+        );
+        final updated = original.copyWith(notifyLabResults: false);
+        expect(updated.notifyLabResults, isFalse);
+        expect(original.notifyLabResults, isTrue);
+      });
+    });
+
     group('toString', () {
       test('should not include PII fields like email or names', () {
         final user = UserModel(

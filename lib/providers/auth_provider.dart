@@ -211,6 +211,36 @@ class AuthProvider extends ChangeNotifier {
     bool? shareWithClinician,
     bool? anonymousResearch,
   }) async {
+    return _updatePreferences(
+      shareWithClinician: shareWithClinician,
+      anonymousResearch: anonymousResearch,
+    );
+  }
+
+  /// Update notification preferences.
+  Future<bool> updateNotifications({
+    bool? notifyLabResults,
+    bool? notifyAppointments,
+    bool? notifyHealthAlerts,
+    bool? notifyWeeklyDigest,
+  }) async {
+    return _updatePreferences(
+      notifyLabResults: notifyLabResults,
+      notifyAppointments: notifyAppointments,
+      notifyHealthAlerts: notifyHealthAlerts,
+      notifyWeeklyDigest: notifyWeeklyDigest,
+    );
+  }
+
+  /// Shared implementation for preference updates (consent + notifications).
+  Future<bool> _updatePreferences({
+    bool? shareWithClinician,
+    bool? anonymousResearch,
+    bool? notifyLabResults,
+    bool? notifyAppointments,
+    bool? notifyHealthAlerts,
+    bool? notifyWeeklyDigest,
+  }) async {
     if (_user == null) return false;
 
     _isLoading = true;
@@ -222,6 +252,10 @@ class AuthProvider extends ChangeNotifier {
         _user!.id,
         shareWithClinician: shareWithClinician,
         anonymousResearch: anonymousResearch,
+        notifyLabResults: notifyLabResults,
+        notifyAppointments: notifyAppointments,
+        notifyHealthAlerts: notifyHealthAlerts,
+        notifyWeeklyDigest: notifyWeeklyDigest,
       );
       _user = updated;
       _isLoading = false;
@@ -233,7 +267,7 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     } catch (e) {
-      debugPrint('Failed to update consent');
+      debugPrint('Failed to update preferences');
       _errorMessage = 'Failed to update preferences.';
       _isLoading = false;
       notifyListeners();

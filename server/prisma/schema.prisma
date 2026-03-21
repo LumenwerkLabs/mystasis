@@ -23,6 +23,10 @@ model User {
   clinicId           String?
   shareWithClinician Boolean  @default(true)
   anonymousResearch  Boolean  @default(false)
+  notifyLabResults   Boolean  @default(true)
+  notifyAppointments Boolean  @default(true)
+  notifyHealthAlerts Boolean  @default(true)
+  notifyWeeklyDigest Boolean  @default(false)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

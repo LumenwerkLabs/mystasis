@@ -9,6 +9,10 @@ class UserModel {
   final String? clinicId;
   final bool shareWithClinician;
   final bool anonymousResearch;
+  final bool notifyLabResults;
+  final bool notifyAppointments;
+  final bool notifyHealthAlerts;
+  final bool notifyWeeklyDigest;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -22,6 +26,10 @@ class UserModel {
     this.clinicId,
     this.shareWithClinician = true,
     this.anonymousResearch = false,
+    this.notifyLabResults = true,
+    this.notifyAppointments = true,
+    this.notifyHealthAlerts = true,
+    this.notifyWeeklyDigest = false,
     this.createdAt,
     this.updatedAt,
   });
@@ -65,6 +73,10 @@ class UserModel {
       clinicId: json['clinicId'] as String?,
       shareWithClinician: json['shareWithClinician'] as bool? ?? true,
       anonymousResearch: json['anonymousResearch'] as bool? ?? false,
+      notifyLabResults: json['notifyLabResults'] as bool? ?? true,
+      notifyAppointments: json['notifyAppointments'] as bool? ?? true,
+      notifyHealthAlerts: json['notifyHealthAlerts'] as bool? ?? true,
+      notifyWeeklyDigest: json['notifyWeeklyDigest'] as bool? ?? false,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'] as String)
           : null,
@@ -86,6 +98,10 @@ class UserModel {
       'clinicId': clinicId,
       'shareWithClinician': shareWithClinician,
       'anonymousResearch': anonymousResearch,
+      'notifyLabResults': notifyLabResults,
+      'notifyAppointments': notifyAppointments,
+      'notifyHealthAlerts': notifyHealthAlerts,
+      'notifyWeeklyDigest': notifyWeeklyDigest,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
     };
@@ -102,6 +118,10 @@ class UserModel {
     String? clinicId,
     bool? shareWithClinician,
     bool? anonymousResearch,
+    bool? notifyLabResults,
+    bool? notifyAppointments,
+    bool? notifyHealthAlerts,
+    bool? notifyWeeklyDigest,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -115,6 +135,10 @@ class UserModel {
       clinicId: clinicId ?? this.clinicId,
       shareWithClinician: shareWithClinician ?? this.shareWithClinician,
       anonymousResearch: anonymousResearch ?? this.anonymousResearch,
+      notifyLabResults: notifyLabResults ?? this.notifyLabResults,
+      notifyAppointments: notifyAppointments ?? this.notifyAppointments,
+      notifyHealthAlerts: notifyHealthAlerts ?? this.notifyHealthAlerts,
+      notifyWeeklyDigest: notifyWeeklyDigest ?? this.notifyWeeklyDigest,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -132,13 +156,30 @@ class UserModel {
         other.role == role &&
         other.clinicId == clinicId &&
         other.shareWithClinician == shareWithClinician &&
-        other.anonymousResearch == anonymousResearch;
+        other.anonymousResearch == anonymousResearch &&
+        other.notifyLabResults == notifyLabResults &&
+        other.notifyAppointments == notifyAppointments &&
+        other.notifyHealthAlerts == notifyHealthAlerts &&
+        other.notifyWeeklyDigest == notifyWeeklyDigest;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, email, firstName, lastName, birthdate, role,
-        clinicId, shareWithClinician, anonymousResearch);
+    return Object.hash(
+      id,
+      email,
+      firstName,
+      lastName,
+      birthdate,
+      role,
+      clinicId,
+      shareWithClinician,
+      anonymousResearch,
+      notifyLabResults,
+      notifyAppointments,
+      notifyHealthAlerts,
+      notifyWeeklyDigest,
+    );
   }
 
   @override

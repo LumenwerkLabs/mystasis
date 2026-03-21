@@ -50,6 +50,10 @@ class UsersService {
     String? currentPassword,
     bool? shareWithClinician,
     bool? anonymousResearch,
+    bool? notifyLabResults,
+    bool? notifyAppointments,
+    bool? notifyHealthAlerts,
+    bool? notifyWeeklyDigest,
   }) async {
     final body = <String, dynamic>{};
     if (firstName != null) body['firstName'] = firstName;
@@ -58,6 +62,10 @@ class UsersService {
     if (currentPassword != null) body['currentPassword'] = currentPassword;
     if (shareWithClinician != null) body['shareWithClinician'] = shareWithClinician;
     if (anonymousResearch != null) body['anonymousResearch'] = anonymousResearch;
+    if (notifyLabResults != null) body['notifyLabResults'] = notifyLabResults;
+    if (notifyAppointments != null) body['notifyAppointments'] = notifyAppointments;
+    if (notifyHealthAlerts != null) body['notifyHealthAlerts'] = notifyHealthAlerts;
+    if (notifyWeeklyDigest != null) body['notifyWeeklyDigest'] = notifyWeeklyDigest;
 
     final response =
         await _apiClient.patch(ApiEndpoints.userById(id), body: body);
