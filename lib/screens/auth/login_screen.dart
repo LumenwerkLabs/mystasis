@@ -15,6 +15,28 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _canUseBiometric = false;
+  String _biometricLabel = 'Biometrics';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometric();
+  }
+
+  Future<void> _checkBiometric() async {
+    final auth = context.read<AuthProvider>();
+    final canUse = await auth.canSignInWithBiometric();
+    if (canUse) {
+      final label = await auth.getBiometricLabel();
+      if (mounted) {
+        setState(() {
+          _canUseBiometric = true;
+          _biometricLabel = label;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -31,6 +53,11 @@ class _LoginScreenState extends State<LoginScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
+    // Navigation handled reactively by AuthWrapper's Consumer
+  }
+
+  Future<void> _handleBiometricSignIn() async {
+    await context.read<AuthProvider>().signInWithBiometric();
     // Navigation handled reactively by AuthWrapper's Consumer
   }
 
@@ -180,6 +207,30 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 24),
+
+                    // Biometric Sign In
+                    if (_canUseBiometric)
+                      Consumer<AuthProvider>(
+                        builder: (context, auth, _) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: OutlinedButton.icon(
+                              onPressed: auth.isLoading ? null : _handleBiometricSignIn,
+                              icon: Icon(
+                                _biometricLabel == 'Face ID'
+                                    ? Icons.face
+                                    : Icons.fingerprint,
+                              ),
+                              label: Text('Sign in with $_biometricLabel'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: MystasisTheme.deepBioTeal,
+                                side: const BorderSide(color: MystasisTheme.deepBioTeal),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
 
                     // Create Account Link
                     Row(

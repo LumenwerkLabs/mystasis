@@ -41,6 +41,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Mystasis uses Face ID to securely sign you in without re-entering your password.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Mystasis reads your health data to track biomarker trends and provide personalized wellness insights.</string>
 	<key>NSHealthUpdateUsageDescription</key>

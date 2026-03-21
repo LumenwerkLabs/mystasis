@@ -103,7 +103,10 @@ class MystasisApp extends StatelessWidget {
         Provider<StorageService>.value(value: storageService),
         ChangeNotifierProvider(
             create: (_) => AuthProvider(
-                authService: authService, usersService: usersService)),
+                  authService: authService,
+                  usersService: usersService,
+                  storageService: storageService,
+                )),
         ChangeNotifierProvider(
             create: (_) =>
                 PatientsProvider(usersService: usersService)),
@@ -211,6 +214,7 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isCheckingAuth = true;
+  bool _biometricPromptHandled = false;
 
   @override
   void initState() {
@@ -229,6 +233,56 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
   }
 
+  Future<void> _promptBiometricIfNeeded(AuthProvider auth) async {
+    if (_biometricPromptHandled) return;
+    _biometricPromptHandled = true;
+
+    final shouldPrompt = await auth.shouldPromptForBiometric();
+    if (!shouldPrompt || !mounted) return;
+
+    final label = await auth.getBiometricLabel();
+
+    if (!mounted) return;
+    final enabled = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              label == 'Face ID' ? Icons.face : Icons.fingerprint,
+              color: MystasisTheme.deepBioTeal,
+            ),
+            const SizedBox(width: 12),
+            Text('Enable $label?'),
+          ],
+        ),
+        content: Text(
+          'Would you like to use $label to sign in next time? '
+          'You can change this later in your profile settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not Now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: MystasisTheme.deepBioTeal,
+            ),
+            child: Text('Enable $label'),
+          ),
+        ],
+      ),
+    );
+
+    await auth.markBiometricPromptShown();
+    if (enabled == true) {
+      await auth.setBiometricEnabled(true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isCheckingAuth) {
@@ -241,7 +295,17 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
-        if (!auth.isAuthenticated) return const LoginScreen();
+        if (!auth.isAuthenticated) {
+          _biometricPromptHandled = false;
+          return const LoginScreen();
+        }
+
+        // Prompt biometric enrollment on first login
+        if (!_biometricPromptHandled && !kIsWeb) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _promptBiometricIfNeeded(auth);
+          });
+        }
 
         // Clinicians get the dashboard on web and desktop
         if (auth.user!.isClinician) return const ClinicianDashboard();

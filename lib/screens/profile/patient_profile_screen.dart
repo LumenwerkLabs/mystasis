@@ -96,7 +96,7 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
 
   Future<void> _deleteAccount() async {
     final deletePasswordController = TextEditingController();
-    await showDialog<String?>(
+    final result = await showDialog<String?>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
@@ -133,10 +133,9 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
       ),
     );
 
-    final password = deletePasswordController.text;
     deletePasswordController.dispose();
-    if (password.isNotEmpty && mounted) {
-      await context.read<AuthProvider>().deleteAccount(password);
+    if (result != null && result.isNotEmpty && mounted) {
+      await context.read<AuthProvider>().deleteAccount(result);
     }
   }
 
@@ -330,6 +329,18 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // Biometric Sign-In
+                if (auth.biometricAvailable)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _buildCard(
+                      context,
+                      title: 'Biometric Sign-In',
+                      icon: Icons.fingerprint,
+                      child: _BiometricToggle(),
+                    ),
+                  ),
+
                 // Delete Account
                 _buildCard(
                   context,
@@ -408,6 +419,66 @@ class _PatientProfileScreenState extends State<PatientProfileScreen> {
           child,
         ],
       ),
+    );
+  }
+}
+
+class _BiometricToggle extends StatefulWidget {
+  @override
+  State<_BiometricToggle> createState() => _BiometricToggleState();
+}
+
+class _BiometricToggleState extends State<_BiometricToggle> {
+  String _label = 'Biometrics';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLabel();
+  }
+
+  Future<void> _loadLabel() async {
+    final label = await context.read<AuthProvider>().getBiometricLabel();
+    if (mounted) setState(() => _label = label);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        return Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sign in with $_label',
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    'Use $_label to sign in without entering your password',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: MystasisTheme.neutralGrey,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: auth.biometricEnabled,
+              onChanged: (value) async {
+                await auth.setBiometricEnabled(value);
+              },
+              activeTrackColor: MystasisTheme.deepBioTeal,
+              activeThumbColor: Colors.white,
+            ),
+          ],
+        );
+      },
     );
   }
 }

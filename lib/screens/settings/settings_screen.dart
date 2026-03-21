@@ -52,15 +52,24 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildLeftColumn() {
-    return const Column(
+    return Column(
       children: [
-        _ProfileCard(),
-        SizedBox(height: 24),
-        _SecurityCard(),
-        SizedBox(height: 24),
-        _ClinicCard(),
-        SizedBox(height: 24),
-        _PatientEnrollmentCard(),
+        const _ProfileCard(),
+        const SizedBox(height: 24),
+        const _SecurityCard(),
+        const SizedBox(height: 24),
+        Consumer<AuthProvider>(
+          builder: (context, auth, _) {
+            if (!auth.biometricAvailable) return const SizedBox.shrink();
+            return const Padding(
+              padding: EdgeInsets.only(bottom: 24),
+              child: _BiometricCard(),
+            );
+          },
+        ),
+        const _ClinicCard(),
+        const SizedBox(height: 24),
+        const _PatientEnrollmentCard(),
       ],
     );
   }
@@ -263,7 +272,7 @@ class _SecurityCardState extends State<_SecurityCard> {
 
   Future<void> _deleteAccount() async {
     final deletePasswordController = TextEditingController();
-    await showDialog<String?>(
+    final result = await showDialog<String?>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
@@ -300,10 +309,9 @@ class _SecurityCardState extends State<_SecurityCard> {
       ),
     );
 
-    final password = deletePasswordController.text;
     deletePasswordController.dispose();
-    if (password.isNotEmpty && mounted) {
-      await context.read<AuthProvider>().deleteAccount(password);
+    if (result != null && result.isNotEmpty && mounted) {
+      await context.read<AuthProvider>().deleteAccount(result);
     }
   }
 
@@ -386,6 +394,51 @@ class _SecurityCardState extends State<_SecurityCard> {
           child: const Text('Delete Account'),
         ),
       ],
+    );
+  }
+}
+
+class _BiometricCard extends StatefulWidget {
+  const _BiometricCard();
+
+  @override
+  State<_BiometricCard> createState() => _BiometricCardState();
+}
+
+class _BiometricCardState extends State<_BiometricCard> {
+  String _label = 'Biometrics';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLabel();
+  }
+
+  Future<void> _loadLabel() async {
+    final label = await context.read<AuthProvider>().getBiometricLabel();
+    if (mounted) setState(() => _label = label);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        return _SettingsCard(
+          title: 'Biometric Sign-In',
+          icon: Icons.fingerprint,
+          children: [
+            _ToggleSetting(
+              label: 'Sign in with $_label',
+              description:
+                  'Use $_label to sign in without entering your password',
+              value: auth.biometricEnabled,
+              onChanged: (v) async {
+                await auth.setBiometricEnabled(v);
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }

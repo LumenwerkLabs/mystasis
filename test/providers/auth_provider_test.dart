@@ -7,26 +7,46 @@ import 'package:mocktail/mocktail.dart';
 // These imports will fail until the classes are created/updated
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/core/services/auth_service.dart';
+import 'package:mystasis/core/services/biometric_auth_service.dart';
+import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/core/models/user_model.dart';
 
 /// Mock for AuthService
 class MockAuthService extends Mock implements AuthService {}
 
+class MockBiometricAuthService extends Mock implements BiometricAuthService {}
+
+class MockStorageService extends Mock implements StorageService {}
+
 void main() {
   group('AuthProvider', () {
     late AuthProvider authProvider;
     late MockAuthService mockAuthService;
+    late MockBiometricAuthService mockBiometricService;
+    late MockStorageService mockStorageService;
     late StreamController<UserModel?> authStateController;
 
     setUp(() {
       mockAuthService = MockAuthService();
+      mockBiometricService = MockBiometricAuthService();
+      mockStorageService = MockStorageService();
       authStateController = StreamController<UserModel?>.broadcast();
 
       when(() => mockAuthService.authStateChanges)
           .thenAnswer((_) => authStateController.stream);
       when(() => mockAuthService.currentUser).thenReturn(null);
+      when(() => mockBiometricService.isAvailable())
+          .thenAnswer((_) async => false);
+      when(() => mockStorageService.getUserId())
+          .thenAnswer((_) async => null);
+      when(() => mockStorageService.isBiometricEnabled(userId: any(named: 'userId')))
+          .thenAnswer((_) async => false);
 
-      authProvider = AuthProvider(authService: mockAuthService);
+      authProvider = AuthProvider(
+        authService: mockAuthService,
+        biometricService: mockBiometricService,
+        storageService: mockStorageService,
+      );
     });
 
     tearDown(() {
@@ -770,7 +790,7 @@ void main() {
         // Assert
         expect(
           authProvider.errorMessage,
-          equals('Password must be at least 6 characters.'),
+          equals('Password must be at least 8 characters.'),
         );
       });
 

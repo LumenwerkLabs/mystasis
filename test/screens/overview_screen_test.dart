@@ -5,8 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:mystasis/core/models/biomarker_model.dart';
 import 'package:mystasis/core/models/paginated_response.dart';
 import 'package:mystasis/core/services/auth_service.dart';
+import 'package:mystasis/core/services/biometric_auth_service.dart';
 import 'package:mystasis/core/services/health_data_service.dart';
 import 'package:mystasis/core/services/llm_service.dart';
+import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/providers/alerts_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
@@ -20,9 +22,15 @@ class MockAuthService extends Mock implements AuthService {}
 
 class MockLlmService extends Mock implements LlmService {}
 
+class MockBiometricAuthService extends Mock implements BiometricAuthService {}
+
+class MockStorageService extends Mock implements StorageService {}
+
 void main() {
   late MockAuthService mockAuthService;
   late MockLlmService mockLlmService;
+  late MockBiometricAuthService mockBiometricService;
+  late MockStorageService mockStorageService;
 
   setUp(() {
     mockAuthService = MockAuthService();
@@ -31,6 +39,16 @@ void main() {
     when(() => mockAuthService.currentUser).thenReturn(null);
 
     mockLlmService = MockLlmService();
+
+    mockBiometricService = MockBiometricAuthService();
+    when(() => mockBiometricService.isAvailable())
+        .thenAnswer((_) async => false);
+
+    mockStorageService = MockStorageService();
+    when(() => mockStorageService.getUserId())
+        .thenAnswer((_) async => null);
+    when(() => mockStorageService.isBiometricEnabled(userId: any(named: 'userId')))
+        .thenAnswer((_) async => false);
   });
 
   Widget buildTestWidget({
@@ -46,7 +64,11 @@ void main() {
           ChangeNotifierProvider<InsightsProvider>(
               create: (_) => InsightsProvider(llmService: mockLlmService)),
           ChangeNotifierProvider<AuthProvider>(
-              create: (_) => AuthProvider(authService: mockAuthService)),
+              create: (_) => AuthProvider(
+                    authService: mockAuthService,
+                    biometricService: mockBiometricService,
+                    storageService: mockStorageService,
+                  )),
           ChangeNotifierProvider<AlertsProvider>(
               create: (_) => AlertsProvider()),
         ],

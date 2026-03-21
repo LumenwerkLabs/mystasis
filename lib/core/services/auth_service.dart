@@ -252,7 +252,7 @@ class AuthService {
     } catch (_) {
       // Best effort — local logout still proceeds
     }
-    await _storageService.clearAll();
+    await _storageService.clearSession();
     _currentUser = null;
     _emitAuthState(null);
   }
@@ -260,7 +260,7 @@ class AuthService {
   /// Force logout without server call — used by the API interceptor
   /// when token refresh fails (session is irrecoverable).
   Future<void> forceLogout() async {
-    await _storageService.clearAll();
+    await _storageService.clearSession();
     _currentUser = null;
     _emitAuthState(null);
   }
@@ -291,8 +291,8 @@ class AuthService {
       _currentUser = user;
       _emitAuthState(user);
     } on UnauthorizedException {
-      // Token/cookie is invalid or expired, clear all stored data
-      await _storageService.clearAll();
+      // Token/cookie is invalid or expired, clear session data
+      await _storageService.clearSession();
       _currentUser = null;
       _emitAuthState(null);
     } on NetworkException {

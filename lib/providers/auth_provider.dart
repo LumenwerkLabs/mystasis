@@ -4,32 +4,68 @@ import 'package:flutter/foundation.dart';
 import 'package:mystasis/core/models/user_model.dart';
 import 'package:mystasis/core/services/api_client.dart';
 import 'package:mystasis/core/services/auth_service.dart';
+import 'package:mystasis/core/services/biometric_auth_service.dart';
+import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/core/services/users_service.dart';
 
 /// Provider for managing authentication state throughout the app
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService;
   final UsersService _usersService;
+  final BiometricAuthService _biometricService;
+  final StorageService _storageService;
 
   UserModel? _user;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _biometricAvailable = false;
+  bool _biometricEnabled = false;
   StreamSubscription<UserModel?>? _authStateSubscription;
 
   AuthProvider({
     AuthService? authService,
     UsersService? usersService,
+    BiometricAuthService? biometricService,
+    StorageService? storageService,
   })  : _authService = authService ?? AuthService(),
-        _usersService = usersService ?? UsersService() {
+        _usersService = usersService ?? UsersService(),
+        _biometricService = biometricService ?? BiometricAuthService(),
+        _storageService = storageService ?? StorageService() {
     _initAuthStateListener();
+    _initBiometricState();
   }
 
   /// Initialize listener for auth state changes
   void _initAuthStateListener() {
     _authStateSubscription = _authService.authStateChanges.listen((user) {
       _user = user;
+      if (user != null) {
+        _refreshBiometricState();
+      }
       notifyListeners();
     });
+  }
+
+  /// Initialize biometric availability and enrollment state.
+  Future<void> _initBiometricState() async {
+    _biometricAvailable = await _biometricService.isAvailable();
+    if (_biometricAvailable) {
+      // Try to load enrollment for stored user (before login)
+      final userId = await _storageService.getUserId();
+      if (userId != null) {
+        _biometricEnabled =
+            await _storageService.isBiometricEnabled(userId: userId);
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Refresh biometric enabled state for the current user.
+  Future<void> _refreshBiometricState() async {
+    if (!_biometricAvailable || _user == null) return;
+    _biometricEnabled =
+        await _storageService.isBiometricEnabled(userId: _user!.id);
+    notifyListeners();
   }
 
   /// Current authenticated user
@@ -43,6 +79,12 @@ class AuthProvider extends ChangeNotifier {
 
   /// Whether the user is authenticated
   bool get isAuthenticated => _user != null;
+
+  /// Whether the device supports biometric authentication
+  bool get biometricAvailable => _biometricAvailable;
+
+  /// Whether the user has enabled biometric sign-in
+  bool get biometricEnabled => _biometricEnabled;
 
   /// Clear the current error message
   void clearError() {
@@ -238,7 +280,10 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _usersService.deleteUser(_user!.id);
+      final deletedUserId = _user!.id;
+      await _usersService.deleteUser(deletedUserId);
+      await _storageService.clearBiometricData(userId: deletedUserId);
+      _biometricEnabled = false;
       _isLoading = false;
       // Sign out to clear tokens and redirect to login
       await signOut();
@@ -255,6 +300,85 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  /// Sign in using biometric authentication (Face ID / Touch ID).
+  /// Prompts biometric, then restores the session from stored tokens.
+  Future<bool> signInWithBiometric() async {
+    if (!_biometricAvailable || !_biometricEnabled) return false;
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final authenticated = await _biometricService.authenticate();
+      if (!authenticated) {
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // Biometric passed — restore session from stored tokens
+      await _authService.checkAuthState();
+      _isLoading = false;
+      notifyListeners();
+      return _user != null;
+    } catch (e) {
+      debugPrint('Failed biometric sign-in');
+      _errorMessage = 'Biometric sign-in failed. Please use your password.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Enable or disable biometric sign-in.
+  /// When enabling, requires biometric verification to confirm identity.
+  Future<void> setBiometricEnabled(bool enabled) async {
+    if (_user == null) return;
+
+    if (enabled) {
+      // Require biometric verification before enabling
+      final authenticated = await _biometricService.authenticate(
+        reason: 'Verify your identity to enable biometric sign-in',
+      );
+      if (!authenticated) return;
+    }
+
+    await _storageService.setBiometricEnabled(enabled, userId: _user!.id);
+    _biometricEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Get the user-facing label for the biometric type (e.g., "Face ID").
+  Future<String> getBiometricLabel() async {
+    return _biometricService.getBiometricLabel();
+  }
+
+  /// Check if biometric sign-in is possible right now
+  /// (device supports it, user enrolled, and both tokens exist).
+  Future<bool> canSignInWithBiometric() async {
+    if (!_biometricAvailable || !_biometricEnabled) return false;
+    final hasAccess = await _storageService.hasToken();
+    final refreshToken = await _storageService.getRefreshToken();
+    return hasAccess && refreshToken != null && refreshToken.isNotEmpty;
+  }
+
+  /// Whether we should prompt the user to enable biometric sign-in.
+  /// True when: device supports biometric, user hasn't been asked yet,
+  /// and biometric is not already enabled.
+  Future<bool> shouldPromptForBiometric() async {
+    if (!_biometricAvailable || _biometricEnabled || _user == null) return false;
+    final alreadyPrompted =
+        await _storageService.isBiometricPromptShown(userId: _user!.id);
+    return !alreadyPrompted;
+  }
+
+  /// Mark the biometric prompt as shown so we don't ask again.
+  Future<void> markBiometricPromptShown() async {
+    if (_user == null) return;
+    await _storageService.setBiometricPromptShown(userId: _user!.id);
   }
 
   /// Map error codes to user-friendly messages

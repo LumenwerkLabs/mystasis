@@ -114,6 +114,8 @@ class StorageService {
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userIdKey = 'user_id';
   static const String _lastHealthSyncKey = 'last_health_sync';
+  static const String _biometricEnabledPrefix = 'biometric_enabled_';
+  static const String _biometricPromptShownPrefix = 'biometric_prompt_shown_';
 
   final SecureStorageWrapper _secureStorage;
 
@@ -217,7 +219,78 @@ class StorageService {
     }
   }
 
-  /// Clear all stored data (logout)
+  /// Save biometric enrollment status, scoped to a specific user.
+  Future<void> setBiometricEnabled(bool enabled, {required String userId}) async {
+    try {
+      await _secureStorage.write(
+        key: '$_biometricEnabledPrefix$userId',
+        value: enabled ? 'true' : 'false',
+      );
+    } catch (e) {
+      throw StorageException('Failed to save biometric setting: $e');
+    }
+  }
+
+  /// Check if biometric sign-in is enabled for a specific user.
+  Future<bool> isBiometricEnabled({required String userId}) async {
+    try {
+      final value = await _secureStorage.read(
+        key: '$_biometricEnabledPrefix$userId',
+      );
+      return value == 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Check if the biometric enrollment prompt has been shown for a specific user.
+  Future<bool> isBiometricPromptShown({required String userId}) async {
+    try {
+      final value = await _secureStorage.read(
+        key: '$_biometricPromptShownPrefix$userId',
+      );
+      return value == 'true';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Mark the biometric enrollment prompt as shown for a specific user.
+  Future<void> setBiometricPromptShown({required String userId}) async {
+    try {
+      await _secureStorage.write(
+        key: '$_biometricPromptShownPrefix$userId',
+        value: 'true',
+      );
+    } catch (e) {
+      throw StorageException('Failed to save biometric prompt state: $e');
+    }
+  }
+
+  /// Clear session data (tokens, user ID) while preserving user-scoped
+  /// preferences like biometric enrollment. Used by signOut/forceLogout.
+  Future<void> clearSession() async {
+    try {
+      await _secureStorage.delete(key: _tokenKey);
+      await _secureStorage.delete(key: _refreshTokenKey);
+      await _secureStorage.delete(key: _userIdKey);
+      await _secureStorage.delete(key: _lastHealthSyncKey);
+    } catch (e) {
+      throw StorageException('Failed to clear session: $e');
+    }
+  }
+
+  /// Clear biometric data for a specific user (used on account deletion).
+  Future<void> clearBiometricData({required String userId}) async {
+    try {
+      await _secureStorage.delete(key: '$_biometricEnabledPrefix$userId');
+      await _secureStorage.delete(key: '$_biometricPromptShownPrefix$userId');
+    } catch (e) {
+      throw StorageException('Failed to clear biometric data: $e');
+    }
+  }
+
+  /// Clear all stored data. Only used for full data wipe (e.g., account deletion).
   Future<void> clearAll() async {
     try {
       await _secureStorage.deleteAll();

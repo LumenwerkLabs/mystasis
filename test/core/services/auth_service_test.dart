@@ -538,7 +538,7 @@ void main() {
     group('signOut', () {
       test('should clear all stored data', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -549,12 +549,12 @@ void main() {
         await authService.signOut();
 
         // Assert
-        verify(() => mockStorageService.clearAll()).called(1);
+        verify(() => mockStorageService.clearSession()).called(1);
       });
 
       test('should update auth state to null', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -601,7 +601,7 @@ void main() {
 
       test('should clear currentUser after signout', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -619,7 +619,7 @@ void main() {
         // Arrange
         when(() => mockStorageService.getRefreshToken())
             .thenAnswer((_) async => 'stored_refresh_token');
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -641,7 +641,7 @@ void main() {
         // Arrange
         when(() => mockStorageService.getRefreshToken())
             .thenAnswer((_) async => null);
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -663,7 +663,7 @@ void main() {
         // Arrange
         when(() => mockStorageService.getRefreshToken())
             .thenAnswer((_) async => 'token');
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -685,7 +685,7 @@ void main() {
         // Arrange
         when(() => mockStorageService.getRefreshToken())
             .thenAnswer((_) async => 'token');
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
         when(() => mockApiClient.post(
               any(),
               body: any(named: 'body'),
@@ -696,7 +696,7 @@ void main() {
         await authService.signOut();
 
         // Assert
-        verify(() => mockStorageService.clearAll()).called(1);
+        verify(() => mockStorageService.clearSession()).called(1);
         expect(authService.currentUser, isNull);
       });
     });
@@ -704,13 +704,13 @@ void main() {
     group('forceLogout', () {
       test('should clear all stored data', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         // Act
         await authService.forceLogout();
 
         // Assert
-        verify(() => mockStorageService.clearAll()).called(1);
+        verify(() => mockStorageService.clearSession()).called(1);
       });
 
       test('should set currentUser to null', () async {
@@ -734,7 +734,7 @@ void main() {
         when(
           () => mockStorageService.saveUserId(any()),
         ).thenAnswer((_) async {});
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         await authService.signIn(
           email: 'test@example.com',
@@ -770,7 +770,7 @@ void main() {
         when(
           () => mockStorageService.saveUserId(any()),
         ).thenAnswer((_) async {});
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         await authService.signIn(
           email: 'test@example.com',
@@ -791,7 +791,7 @@ void main() {
 
       test('should not call the logout API endpoint', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         // Act
         await authService.forceLogout();
@@ -874,13 +874,13 @@ void main() {
         when(
           () => mockApiClient.get('/auth/me'),
         ).thenThrow(UnauthorizedException('Token expired'));
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         // Act
         await authService.checkAuthState();
 
         // Assert
-        verify(() => mockStorageService.clearAll()).called(1);
+        verify(() => mockStorageService.clearSession()).called(1);
         expect(authService.currentUser, isNull);
       });
 
@@ -894,7 +894,7 @@ void main() {
         when(
           () => mockApiClient.get('/auth/me'),
         ).thenThrow(UnauthorizedException('Token expired'));
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         // Act
         final nullEmitted = expectLater(
@@ -983,7 +983,7 @@ void main() {
 
       test('should emit null on logout', () async {
         // Arrange
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         // Pre-set user state by signing in
         final signInResponse = {
@@ -1135,7 +1135,7 @@ void main() {
         when(
           () => mockStorageService.saveUserId(any()),
         ).thenAnswer((_) async {});
-        when(() => mockStorageService.clearAll()).thenAnswer((_) async {});
+        when(() => mockStorageService.clearSession()).thenAnswer((_) async {});
 
         await authService.signIn(
           email: 'test@example.com',
