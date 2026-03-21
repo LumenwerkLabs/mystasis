@@ -9,8 +9,14 @@ import 'package:mystasis/core/services/health_data_service.dart';
 import 'package:mystasis/core/services/llm_service.dart';
 import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/core/services/users_service.dart';
+import 'package:mystasis/core/services/clinics_service.dart';
+import 'package:mystasis/core/services/analytics_service.dart';
+import 'package:mystasis/core/services/alerts_service.dart';
 import 'package:mystasis/core/services/anamnesis_service.dart';
+import 'package:mystasis/providers/alerts_provider.dart';
+import 'package:mystasis/providers/analytics_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
+import 'package:mystasis/providers/clinics_provider.dart';
 import 'package:mystasis/providers/patients_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
@@ -23,6 +29,7 @@ import 'package:mystasis/screens/dashboard/clinician_dashboard.dart';
 import 'package:mystasis/screens/health_sync/apple_health_sync_screen.dart';
 import 'package:mystasis/screens/mobile_home_screen.dart';
 import 'package:mystasis/screens/insights/patient_insights_screen.dart';
+import 'package:mystasis/screens/profile/patient_profile_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +47,10 @@ void main() async {
   );
   final healthDataService = HealthDataService(apiClient: apiClient);
   final usersService = UsersService(apiClient: apiClient);
+  final clinicsService = ClinicsService(apiClient: apiClient);
+  final analyticsService = AnalyticsService(apiClient: apiClient);
   final llmService = LlmService(apiClient: apiClient);
+  final alertsService = AlertsService(apiClient: apiClient);
   final anamnesisService = AnamnesisService(apiClient: apiClient);
 
   // Wire session expiry: when token refresh fails, force logout.
@@ -54,7 +64,10 @@ void main() async {
     authService: authService,
     healthDataService: healthDataService,
     usersService: usersService,
+    clinicsService: clinicsService,
     llmService: llmService,
+    alertsService: alertsService,
+    analyticsService: analyticsService,
     anamnesisService: anamnesisService,
   ));
 }
@@ -64,7 +77,10 @@ class MystasisApp extends StatelessWidget {
   final AuthService authService;
   final HealthDataService healthDataService;
   final UsersService usersService;
+  final ClinicsService clinicsService;
   final LlmService llmService;
+  final AlertsService alertsService;
+  final AnalyticsService analyticsService;
   final AnamnesisService anamnesisService;
 
   const MystasisApp({
@@ -73,7 +89,10 @@ class MystasisApp extends StatelessWidget {
     required this.authService,
     required this.healthDataService,
     required this.usersService,
+    required this.clinicsService,
     required this.llmService,
+    required this.alertsService,
+    required this.analyticsService,
     required this.anamnesisService,
   });
 
@@ -81,15 +100,26 @@ class MystasisApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<StorageService>.value(value: storageService),
         ChangeNotifierProvider(
-            create: (_) => AuthProvider(authService: authService)),
+            create: (_) => AuthProvider(
+                authService: authService, usersService: usersService)),
         ChangeNotifierProvider(
-            create: (_) => PatientsProvider(usersService: usersService)),
+            create: (_) =>
+                PatientsProvider(usersService: usersService)),
+        ChangeNotifierProvider(
+            create: (_) =>
+                ClinicsProvider(clinicsService: clinicsService)),
         ChangeNotifierProvider(
             create: (_) =>
                 BiomarkersProvider(healthDataService: healthDataService)),
         ChangeNotifierProvider(
             create: (_) => InsightsProvider(llmService: llmService)),
+        ChangeNotifierProvider(
+            create: (_) => AlertsProvider(alertsService: alertsService)),
+        ChangeNotifierProvider(
+            create: (_) =>
+                AnalyticsProvider(analyticsService: analyticsService)),
         ChangeNotifierProvider(
             create: (_) => HealthSyncProvider(
                   healthDataService: healthDataService,
@@ -140,6 +170,13 @@ class MystasisApp extends StatelessWidget {
               return MaterialPageRoute(
                 builder: (_) => const _AuthRouteGuard(
                   child: PatientInsightsScreen(),
+                ),
+                settings: settings,
+              );
+            case '/profile':
+              return MaterialPageRoute(
+                builder: (_) => const _AuthRouteGuard(
+                  child: PatientProfileScreen(),
                 ),
                 settings: settings,
               );

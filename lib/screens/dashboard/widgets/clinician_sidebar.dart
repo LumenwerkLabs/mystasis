@@ -69,57 +69,86 @@ class ClinicianSidebar extends StatelessWidget {
     );
   }
 
+  /// Indices that correspond to clinic-wide screens (not patient-scoped).
+  static const clinicWideIndices = {2, 6}; // Analytics, Settings
+
   Widget _buildNavItems() {
-    final items = [
-      _NavItem(
-        icon: Icons.dashboard_outlined,
-        activeIcon: Icons.dashboard,
-        label: 'Overview',
-      ),
-      _NavItem(
-        icon: Icons.science_outlined,
-        activeIcon: Icons.science,
-        label: 'Biomarkers',
-      ),
-      _NavItem(
-        icon: Icons.watch_outlined,
-        activeIcon: Icons.watch,
-        label: 'Wearables',
-      ),
-      _NavItem(
-        icon: Icons.assessment_outlined,
-        activeIcon: Icons.assessment,
-        label: 'Reports',
-      ),
-      _NavItem(
-        icon: Icons.mic_outlined,
-        activeIcon: Icons.mic,
-        label: 'Anamnesis',
-      ),
-      _NavItem(
-        icon: Icons.settings_outlined,
-        activeIcon: Icons.settings,
-        label: 'Settings',
-      ),
+    // Patient-scoped items (indices 0-1, 3-5)
+    final patientItems = [
+      (0, _NavItem(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'Overview')),
+      (1, _NavItem(icon: Icons.science_outlined, activeIcon: Icons.science, label: 'Biomarkers')),
+      (3, _NavItem(icon: Icons.assessment_outlined, activeIcon: Icons.assessment, label: 'Reports')),
+      (4, _NavItem(icon: Icons.mic_outlined, activeIcon: Icons.mic, label: 'Anamnesis')),
+      (5, _NavItem(icon: Icons.notifications_outlined, activeIcon: Icons.notifications, label: 'Alerts')),
     ];
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final isSelected = index == selectedIndex;
+    // Clinic-wide items (indices 2, 6)
+    final clinicItems = [
+      (2, _NavItem(icon: Icons.analytics_outlined, activeIcon: Icons.analytics, label: 'Analytics')),
+      (6, _NavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings')),
+    ];
 
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: _SidebarNavItem(
-            icon: isSelected ? item.activeIcon : item.icon,
-            label: item.label,
-            isSelected: isSelected,
-            onTap: () => onItemSelected(index),
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      children: [
+        // Patient section label
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 8),
+          child: Text(
+            'PATIENT',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
           ),
-        );
-      },
+        ),
+        ...patientItems.map((entry) {
+          final (index, item) = entry;
+          final isSelected = index == selectedIndex;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _SidebarNavItem(
+              icon: isSelected ? item.activeIcon : item.icon,
+              label: item.label,
+              isSelected: isSelected,
+              onTap: () => onItemSelected(index),
+            ),
+          );
+        }),
+
+        // Divider + Clinic section label
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Divider(color: Colors.white.withValues(alpha: 0.2), height: 1),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 8),
+          child: Text(
+            'CLINIC',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.5),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ),
+        ...clinicItems.map((entry) {
+          final (index, item) = entry;
+          final isSelected = index == selectedIndex;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _SidebarNavItem(
+              icon: isSelected ? item.activeIcon : item.icon,
+              label: item.label,
+              isSelected: isSelected,
+              onTap: () => onItemSelected(index),
+            ),
+          );
+        }),
+      ],
     );
   }
 

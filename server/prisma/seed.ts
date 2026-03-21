@@ -2,6 +2,12 @@ import 'dotenv/config';
 import { PrismaClient, UserRole, BiomarkerType } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+
+// Guard: prevent seed from running in production
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Seed script must not run in production');
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -12,7 +18,8 @@ const prisma = new PrismaClient({ adapter });
 
 const SEED_SOURCE = 'seed_data';
 const CLINIC_NAME = 'Mystasis Demo Clinic';
-const PASSWORD = 'TestPass123';
+const PASSWORD = process.env.SEED_PASSWORD || crypto.randomUUID();
+const CLINIC_ID = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
 
 const clinician = {
   email: 'clinician@mystasis.dev',
@@ -92,10 +99,10 @@ async function main() {
 
   // Upsert clinic
   const clinic = await prisma.clinic.upsert({
-    where: { id: 'seed-clinic-001' },
+    where: { id: CLINIC_ID },
     update: { name: CLINIC_NAME },
     create: {
-      id: 'seed-clinic-001',
+      id: CLINIC_ID,
       name: CLINIC_NAME,
       address: '123 Longevity Lane, San Francisco, CA 94102',
       phone: '+1-555-0100',
@@ -194,7 +201,12 @@ async function main() {
   }
 
   console.log('\n✅ Seed complete!');
-  console.log(`   Login: ${clinician.email} / ${PASSWORD}`);
+  console.log(`   Login: ${clinician.email}`);
+  if (process.env.SEED_PASSWORD) {
+    console.log('   Password: (from SEED_PASSWORD env var)');
+  } else {
+    console.log(`   Password: ${PASSWORD} (auto-generated, set SEED_PASSWORD to control)`)
+  }
 }
 
 main()

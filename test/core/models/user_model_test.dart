@@ -28,9 +28,9 @@ void main() {
         expect(user.firstName, equals('John'));
         expect(user.lastName, equals('Doe'));
         expect(user.birthdate, isA<DateTime>());
-        expect(user.birthdate.year, equals(1990));
-        expect(user.birthdate.month, equals(1));
-        expect(user.birthdate.day, equals(15));
+        expect(user.birthdate!.year, equals(1990));
+        expect(user.birthdate!.month, equals(1));
+        expect(user.birthdate!.day, equals(15));
         expect(user.role, equals('patient'));
         expect(user.createdAt, isA<DateTime>());
       });
@@ -109,7 +109,7 @@ void main() {
         // Assert
         expect(user.id, equals('user_123'));
         expect(user.email, equals('test@example.com'));
-        expect(user.birthdate.year, equals(1990));
+        expect(user.birthdate!.year, equals(1990));
         expect(user.firstName, isNull);
         expect(user.lastName, isNull);
         expect(user.createdAt, isNull);
@@ -183,9 +183,9 @@ void main() {
         final user = UserModel.fromJson(json);
 
         // Assert
-        expect(user.birthdate.year, equals(1985));
-        expect(user.birthdate.month, equals(12));
-        expect(user.birthdate.day, equals(25));
+        expect(user.birthdate!.year, equals(1985));
+        expect(user.birthdate!.month, equals(12));
+        expect(user.birthdate!.day, equals(25));
       });
 
       test('should parse birthdate with full ISO 8601 datetime format', () {
@@ -201,9 +201,9 @@ void main() {
         final user = UserModel.fromJson(json);
 
         // Assert
-        expect(user.birthdate.year, equals(1985));
-        expect(user.birthdate.month, equals(12));
-        expect(user.birthdate.day, equals(25));
+        expect(user.birthdate!.year, equals(1985));
+        expect(user.birthdate!.month, equals(12));
+        expect(user.birthdate!.day, equals(25));
       });
     });
 
@@ -407,9 +407,9 @@ void main() {
         expect(resultJson['lastName'], equals(originalJson['lastName']));
         expect(resultJson['role'], equals(originalJson['role']));
         // Birthdate should be preserved (though format may differ)
-        expect(user.birthdate.year, equals(1990));
-        expect(user.birthdate.month, equals(1));
-        expect(user.birthdate.day, equals(15));
+        expect(user.birthdate!.year, equals(1990));
+        expect(user.birthdate!.month, equals(1));
+        expect(user.birthdate!.day, equals(15));
       });
     });
 
@@ -593,6 +593,25 @@ void main() {
         // Assert
         expect(user.isClinician, isTrue);
         expect(user.isPatient, isFalse);
+      });
+    });
+
+    group('toString', () {
+      test('should not include PII fields like email or names', () {
+        final user = UserModel(
+          id: 'user_123',
+          email: 'sensitive@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          birthdate: DateTime(1990, 1, 15),
+          role: 'patient',
+        );
+        final str = user.toString();
+        expect(str, contains('user_123'));
+        expect(str, contains('patient'));
+        expect(str, isNot(contains('sensitive@example.com')));
+        expect(str, isNot(contains('John')));
+        expect(str, isNot(contains('Doe')));
       });
     });
   });

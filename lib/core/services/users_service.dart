@@ -36,7 +36,32 @@ class UsersService {
 
   /// Fetch a single user by ID
   Future<UserModel> getUser(String id) async {
-    final response = await _apiClient.get('${ApiEndpoints.users}/$id');
+    final response = await _apiClient.get(ApiEndpoints.userById(id));
     return UserModel.fromJson(response as Map<String, dynamic>);
+  }
+
+  /// Update user profile (firstName, lastName, password).
+  /// When changing password, [currentPassword] is required for verification.
+  Future<UserModel> updateUser(
+    String id, {
+    String? firstName,
+    String? lastName,
+    String? password,
+    String? currentPassword,
+  }) async {
+    final body = <String, dynamic>{};
+    if (firstName != null) body['firstName'] = firstName;
+    if (lastName != null) body['lastName'] = lastName;
+    if (password != null) body['password'] = password;
+    if (currentPassword != null) body['currentPassword'] = currentPassword;
+
+    final response =
+        await _apiClient.patch(ApiEndpoints.userById(id), body: body);
+    return UserModel.fromJson(response as Map<String, dynamic>);
+  }
+
+  /// Delete a user account (cascade deletes all related data).
+  Future<void> deleteUser(String id) async {
+    await _apiClient.delete(ApiEndpoints.userById(id));
   }
 }

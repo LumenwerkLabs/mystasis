@@ -6,6 +6,7 @@ import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/health_sync_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
 import 'package:mystasis/screens/insights/patient_insights_screen.dart';
+import 'package:mystasis/screens/profile/patient_profile_screen.dart';
 
 /// Minimal mobile home screen for patients.
 ///
@@ -94,6 +95,11 @@ class _MobileHomeScreenState extends State<MobileHomeScreen> {
                   return _NudgeCard(provider: provider);
                 },
               ),
+
+              const SizedBox(height: 24),
+
+              // Profile card
+              _ProfileCard(userName: userName, email: auth.user?.email ?? ''),
             ],
           ),
         ),
@@ -562,6 +568,80 @@ class _NudgeCard extends StatelessWidget {
         ],
       ),
       child: child,
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  final String userName;
+  final String email;
+
+  const _ProfileCard({required this.userName, required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PatientProfileScreen()),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 22,
+              backgroundColor:
+                  MystasisTheme.deepBioTeal.withValues(alpha: 0.1),
+              child: Text(
+                userName.substring(0, 1).toUpperCase(),
+                style: const TextStyle(
+                  color: MystasisTheme.deepBioTeal,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    userName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    email,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: MystasisTheme.neutralGrey),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: MystasisTheme.neutralGrey),
+          ],
+        ),
+      ),
     );
   }
 }

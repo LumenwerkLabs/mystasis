@@ -63,6 +63,55 @@ class BiomarkersProvider extends ChangeNotifier {
     return map;
   }
 
+  // --- Trend state ---
+  List<BiomarkerModel> _trendData = [];
+  bool _isTrendLoading = false;
+  String? _trendError;
+
+  List<BiomarkerModel> get trendData => _trendData;
+  bool get isTrendLoading => _isTrendLoading;
+  String? get trendError => _trendError;
+
+  /// Load trend data for a specific biomarker type and date range.
+  Future<void> loadTrend(
+    String userId,
+    String type, {
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    _isTrendLoading = true;
+    _trendError = null;
+    notifyListeners();
+
+    try {
+      final now = DateTime.now();
+      _trendData = await _healthDataService.getTrend(
+        userId,
+        type,
+        startDate ?? now.subtract(const Duration(days: 90)),
+        endDate ?? now,
+      );
+      _isTrendLoading = false;
+      notifyListeners();
+    } on NetworkException {
+      _trendError = 'Unable to connect. Please check your network.';
+      _isTrendLoading = false;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to load trend');
+      _trendError = 'Failed to load trend data.';
+      _isTrendLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Clear trend data.
+  void clearTrend() {
+    _trendData = [];
+    _trendError = null;
+    notifyListeners();
+  }
+
   /// Get the latest reading for each biomarker type
   List<BiomarkerModel> get latestByType {
     final map = <String, BiomarkerModel>{};

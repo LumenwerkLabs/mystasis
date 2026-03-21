@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/core/services/storage_service.dart';
 import 'package:mystasis/providers/patients_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
@@ -9,35 +10,59 @@ import 'package:mystasis/screens/dashboard/widgets/clinician_sidebar.dart';
 import 'package:mystasis/screens/dashboard/widgets/clinician_navbar.dart';
 import 'package:mystasis/screens/dashboard/screens/overview_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/biomarkers_screen.dart';
-import 'package:mystasis/screens/dashboard/screens/wearables_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/reports_screen.dart';
 import 'package:mystasis/screens/dashboard/screens/anamnesis_screen.dart';
+import 'package:mystasis/screens/dashboard/screens/alerts_screen.dart';
+import 'package:mystasis/screens/dashboard/screens/analytics_screen.dart';
 import 'package:mystasis/screens/settings/settings_screen.dart';
+import 'package:mystasis/screens/clinic/clinic_setup_screen.dart';
+import 'package:mystasis/providers/alerts_provider.dart';
+import 'package:mystasis/providers/clinics_provider.dart';
 import 'package:mystasis/providers/anamnesis_provider.dart';
 
-class ClinicianDashboard extends StatefulWidget {
+class ClinicianDashboard extends StatelessWidget {
   const ClinicianDashboard({super.key});
 
   @override
-  State<ClinicianDashboard> createState() => _ClinicianDashboardState();
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, auth, _) {
+        final clinicId = auth.user?.clinicId;
+        if (clinicId == null) {
+          return ClinicSetupScreen(
+            storageService: context.read<StorageService>(),
+          );
+        }
+        // Use clinicId as key so a fresh State is created after clinic setup
+        return _DashboardBody(key: ValueKey(clinicId), clinicId: clinicId);
+      },
+    );
+  }
 }
 
-class _ClinicianDashboardState extends State<ClinicianDashboard> {
+class _DashboardBody extends StatefulWidget {
+  final String clinicId;
+
+  const _DashboardBody({super.key, required this.clinicId});
+
+  @override
+  State<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends State<_DashboardBody> {
   int _selectedNavIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Load patients on dashboard init, then load biomarkers for auto-selected patient
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final auth = context.read<AuthProvider>();
-      if (auth.user == null || !auth.user!.isClinician) return;
-
+      context.read<ClinicsProvider>().loadClinic();
       final patientsProvider = context.read<PatientsProvider>();
       await patientsProvider.loadPatients();
       final selected = patientsProvider.selectedPatient;
       if (selected != null && mounted) {
         context.read<BiomarkersProvider>().loadBiomarkers(selected.id);
+        context.read<AlertsProvider>().loadAlerts(selected.id);
       }
     });
   }
@@ -49,9 +74,9 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
   void _onPatientSelected(String patientId) {
     final patientsProvider = context.read<PatientsProvider>();
     patientsProvider.selectPatientById(patientId);
-    // Reload biomarkers and clear insights for newly selected patient
     context.read<BiomarkersProvider>().reloadBiomarkers(patientId);
     context.read<InsightsProvider>().clearSummaries();
+    context.read<AlertsProvider>().clearForPatient();
     context.read<AnamnesisProvider>().clearForPatient();
   }
 
@@ -78,18 +103,18 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
           backgroundColor: MystasisTheme.boneWhite,
           body: Row(
             children: [
-              // Permanent sidebar
               ClinicianSidebar(
                 selectedIndex: _selectedNavIndex,
                 onItemSelected: _onNavItemSelected,
               ),
-
-              // Main content area
               Expanded(
                 child: Column(
                   children: [
-                    // Top navbar
-                    if (patients.isNotEmpty && selectedPatient != null)
+                    if (ClinicianSidebar.clinicWideIndices
+                        .contains(_selectedNavIndex))
+                      // Clinic-wide screens don't need patient selector
+                      const SizedBox(height: 64)
+                    else if (patients.isNotEmpty && selectedPatient != null)
                       ClinicianNavbar(
                         patients: patients,
                         selectedPatient: selectedPatient,
@@ -102,8 +127,6 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
                       )
                     else
                       const SizedBox(height: 64),
-
-                    // Page content
                     Expanded(child: _buildPageContent(selectedUser?.id)),
                   ],
                 ),
@@ -119,9 +142,10 @@ class _ClinicianDashboardState extends State<ClinicianDashboard> {
     final screens = [
       OverviewScreen(patientId: patientId),
       BiomarkersScreen(patientId: patientId),
-      const WearablesScreen(),
+      const AnalyticsScreen(),
       ReportsScreen(patientId: patientId),
       AnamnesisScreen(patientId: patientId),
+      AlertsScreen(patientId: patientId),
       const SettingsScreen(),
     ];
 

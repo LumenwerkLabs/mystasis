@@ -8,6 +8,7 @@ import 'package:mystasis/core/services/auth_service.dart';
 import 'package:mystasis/core/services/health_data_service.dart';
 import 'package:mystasis/core/services/llm_service.dart';
 import 'package:mystasis/core/theme/theme.dart';
+import 'package:mystasis/providers/alerts_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
@@ -46,6 +47,8 @@ void main() {
               create: (_) => InsightsProvider(llmService: mockLlmService)),
           ChangeNotifierProvider<AuthProvider>(
               create: (_) => AuthProvider(authService: mockAuthService)),
+          ChangeNotifierProvider<AlertsProvider>(
+              create: (_) => AlertsProvider()),
         ],
         child: Scaffold(body: OverviewScreen(patientId: patientId)),
       ),

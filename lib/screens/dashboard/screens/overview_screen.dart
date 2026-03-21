@@ -7,6 +7,7 @@ import 'package:mystasis/core/widgets/medical_disclaimer.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
 import 'package:mystasis/providers/auth_provider.dart';
 import 'package:mystasis/providers/insights_provider.dart';
+import 'package:mystasis/screens/dashboard/widgets/alerts_card.dart';
 
 class OverviewScreen extends StatelessWidget {
   final String? patientId;
@@ -88,7 +89,11 @@ class OverviewScreen extends StatelessWidget {
   Widget _buildRightColumn() {
     return Column(
       children: [
+        const ActiveAlertsCard(),
+        const SizedBox(height: 24),
         _AIInsightsCard(patientId: patientId),
+        const SizedBox(height: 24),
+        const _ConnectedDevicesCard(),
         const SizedBox(height: 24),
         const _UpcomingActionsCard(),
         const SizedBox(height: 24),
@@ -244,7 +249,20 @@ class _HomeostasisScoreCard extends StatelessWidget {
                 'Homeostasis Score',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              TextButton(onPressed: () {}, child: const Text('View Details')),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: MystasisTheme.signalAmber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Coming Soon',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: MystasisTheme.signalAmber,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -654,6 +672,153 @@ class _AIInsightsCard extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _ConnectedDevicesCard extends StatelessWidget {
+  const _ConnectedDevicesCard();
+
+  static const _sourceDisplay = <String, (String, IconData)>{
+    'apple_health': ('Apple Health', Icons.apple),
+    'google_fit': ('Google Fit', Icons.fitness_center),
+    'myfitnesspal': ('MyFitnessPal', Icons.restaurant),
+    'cronometer': ('Cronometer', Icons.pie_chart),
+    'manual': ('Manual Entry', Icons.edit_note),
+    'lab_upload': ('Lab Upload', Icons.science_outlined),
+    'seed_data': ('Seed Data', Icons.storage),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<BiomarkersProvider>(
+      builder: (context, provider, _) {
+        // Extract distinct non-null sources from loaded biomarkers
+        final sources = provider.biomarkers
+            .map((b) => b.source)
+            .whereType<String>()
+            .toSet()
+            .toList()
+          ..sort();
+
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.devices, size: 20,
+                      color: MystasisTheme.deepBioTeal),
+                  const SizedBox(width: 8),
+                  Text('Data Sources',
+                      style: Theme.of(context).textTheme.headlineSmall),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (provider.isLoading)
+                const Center(child: CircularProgressIndicator())
+              else if (sources.isEmpty)
+                Text(
+                  'No data sources detected.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: MystasisTheme.neutralGrey),
+                )
+              else
+                ...sources.map((source) {
+                  final display = _sourceDisplay[source.toLowerCase()];
+                  final name = display?.$1 ?? _formatSourceName(source);
+                  final icon = display?.$2 ?? Icons.link;
+
+                  // Count records from this source
+                  final count = provider.biomarkers
+                      .where((b) => b.source == source)
+                      .length;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: MystasisTheme.deepBioTeal
+                                .withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(icon, size: 18,
+                              color: MystasisTheme.deepBioTeal),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(name,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.w500)),
+                              Text(
+                                '$count record${count == 1 ? '' : 's'}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                        color: MystasisTheme.neutralGrey),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: MystasisTheme.softAlgae
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Active',
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
+                                ?.copyWith(
+                                    color: MystasisTheme.softAlgae,
+                                    fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _formatSourceName(String source) {
+    return source
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((w) =>
+            w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
+        .join(' ');
   }
 }
 

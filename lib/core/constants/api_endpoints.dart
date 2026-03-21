@@ -7,9 +7,9 @@ class ApiEndpoints {
     const envUrl = String.fromEnvironment('API_BASE_URL');
     if (envUrl.isNotEmpty) {
       // Enforce HTTPS for non-localhost URLs
-      if (!envUrl.startsWith('https://') &&
-          !envUrl.contains('localhost') &&
-          !envUrl.contains('127.0.0.1')) {
+      final uri = Uri.parse(envUrl);
+      final isLocal = uri.host == 'localhost' || uri.host == '127.0.0.1';
+      if (!envUrl.startsWith('https://') && !isLocal) {
         throw StateError(
           'API_BASE_URL must use HTTPS for non-localhost environments',
         );
@@ -55,6 +55,33 @@ class ApiEndpoints {
       '/anamnesis/patient/$patientId';
   static String anamnesisById(String id) => '/anamnesis/$id';
 
+  // Analytics endpoints
+  static String cohortSummary(String clinicId) =>
+      '/analytics/cohort/$clinicId/summary';
+  static String riskDistribution(String clinicId) =>
+      '/analytics/cohort/$clinicId/risk-distribution';
+  static String alertStatistics(String clinicId) =>
+      '/analytics/cohort/$clinicId/alerts';
+  static String trendSummary(String clinicId, String type) =>
+      '/analytics/cohort/$clinicId/trends/$type';
+
+  // Clinic endpoints
+  static const String clinics = '/clinics';
+  static String clinicById(String id) => '/clinics/$id';
+  static String clinicPatients(String clinicId) =>
+      '/clinics/$clinicId/patients';
+  static String enrollPatient(String clinicId, String patientId) =>
+      '/clinics/$clinicId/patients/$patientId';
+
+  // Alert endpoints
+  static String alertsForUser(String userId) => '/alerts/$userId';
+  static String activeAlertsForUser(String userId) => '/alerts/$userId/active';
+  static String alertDetail(String id) => '/alerts/detail/$id';
+  static String acknowledgeAlert(String id) => '/alerts/$id/acknowledge';
+  static String dismissAlert(String id) => '/alerts/$id/dismiss';
+  static String resolveAlert(String id) => '/alerts/$id/resolve';
+
   // User endpoints
   static const String users = '/users';
+  static String userById(String id) => '/users/$id';
 }

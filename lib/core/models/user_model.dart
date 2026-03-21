@@ -4,7 +4,7 @@ class UserModel {
   final String email;
   final String? firstName;
   final String? lastName;
-  final DateTime birthdate;
+  final DateTime? birthdate;
   final String role;
   final String? clinicId;
   final DateTime? createdAt;
@@ -13,7 +13,7 @@ class UserModel {
   const UserModel({
     required this.id,
     required this.email,
-    required this.birthdate,
+    this.birthdate,
     required this.role,
     this.firstName,
     this.lastName,
@@ -52,7 +52,9 @@ class UserModel {
     return UserModel(
       id: json['id'] as String,
       email: json['email'] as String,
-      birthdate: DateTime.parse(json['birthdate'] as String),
+      birthdate: json['birthdate'] != null
+          ? DateTime.parse(json['birthdate'] as String)
+          : null,
       role: json['role'] as String? ?? 'patient',
       firstName: json['firstName'] as String?,
       lastName: json['lastName'] as String?,
@@ -71,7 +73,7 @@ class UserModel {
     return {
       'id': id,
       'email': email,
-      'birthdate': birthdate.toIso8601String(),
+      'birthdate': birthdate?.toIso8601String(),
       'role': role,
       'firstName': firstName,
       'lastName': lastName,
@@ -126,6 +128,6 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(id: $id, email: $email, displayName: $displayName, role: $role)';
+    return 'UserModel(id: $id, role: $role)';
   }
 }

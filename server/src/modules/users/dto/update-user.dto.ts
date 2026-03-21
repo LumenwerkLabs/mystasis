@@ -71,4 +71,17 @@ export class UpdateUserDto {
     message: 'Password must contain at least one letter and one number',
   })
   password?: string;
+
+  /**
+   * Current password for verification when changing password.
+   * Required when `password` is provided.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Current password (required when changing password, for verification)',
+    example: 'OldSecurePass123',
+  })
+  @IsOptional()
+  @IsString({ message: 'Current password must be a string' })
+  currentPassword?: string;
 }

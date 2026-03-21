@@ -55,6 +55,9 @@ class BiomarkerModel {
   /// Human-readable display name for the biomarker type
   String get displayName => _displayNames[type] ?? type;
 
+  /// Static lookup for display name by biomarker type string.
+  static String? displayNameFor(String type) => _displayNames[type];
+
   /// Category grouping for the biomarker type
   String get category => _categories[type] ?? 'Other';
 

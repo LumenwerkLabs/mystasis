@@ -173,7 +173,7 @@ void main() {
         expect(result.email, equals('test@example.com'));
         expect(result.firstName, equals('John'));
         expect(result.lastName, equals('Doe'));
-        expect(result.birthdate.year, equals(1990));
+        expect(result.birthdate!.year, equals(1990));
       });
 
       test('should throw AuthException on duplicate email (409)', () async {

@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { Prisma, UserRole, User } from '../../generated/prisma/client';
@@ -233,6 +235,7 @@ export class UsersService {
     id: string,
     data: {
       password?: string;
+      currentPassword?: string;
       firstName?: string;
       lastName?: string;
       role?: UserRole;
@@ -247,8 +250,26 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    // Hash password if provided
-    const updateData = { ...data };
+    // Verify current password when changing password
+    if (data.password) {
+      if (!data.currentPassword) {
+        throw new BadRequestException(
+          'Current password is required when changing password',
+        );
+      }
+      const isCurrentPasswordValid = await bcrypt.compare(
+        data.currentPassword,
+        existingUser.password,
+      );
+      if (!isCurrentPasswordValid) {
+        throw new UnauthorizedException('Current password is incorrect');
+      }
+    }
+
+    // Build update data, excluding currentPassword (not a DB field)
+    const { currentPassword, ...fieldsToUpdate } = data;
+    void currentPassword; // Explicitly mark as intentionally unused
+    const updateData = { ...fieldsToUpdate };
     if (data.password) {
       updateData.password = await bcrypt.hash(data.password, this.SALT_ROUNDS);
     }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:mystasis/core/theme/theme.dart';
 import 'package:mystasis/core/models/biomarker_model.dart';
 import 'package:mystasis/providers/biomarkers_provider.dart';
+import 'package:mystasis/screens/dashboard/screens/biomarker_detail_screen.dart';
 
 class BiomarkersScreen extends StatefulWidget {
   final String? patientId;
@@ -66,6 +67,7 @@ class _BiomarkersPageState extends State<BiomarkersScreen> {
           final range = BiomarkerModel.referenceRanges[latest.type];
 
           biomarkerCards.add(_BiomarkerCardData(
+            type: latest.type,
             name: latest.displayName,
             category: latest.category,
             value: latest.value,
@@ -182,7 +184,10 @@ class _BiomarkersPageState extends State<BiomarkersScreen> {
                               width: (constraints.maxWidth -
                                       (crossAxisCount - 1) * 16) /
                                   crossAxisCount,
-                              child: _BiomarkerCard(biomarker: b),
+                              child: GestureDetector(
+                                onTap: () => _openDetail(context, b),
+                                child: _BiomarkerCard(biomarker: b),
+                              ),
                             ),
                           )
                           .toList(),
@@ -196,6 +201,28 @@ class _BiomarkersPageState extends State<BiomarkersScreen> {
     );
   }
 
+  void _openDetail(BuildContext context, _BiomarkerCardData biomarker) {
+    if (widget.patientId == null) return;
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
+          child: BiomarkerDetailScreen(
+            biomarkerType: biomarker.type,
+            biomarkerName: biomarker.name,
+            patientId: widget.patientId!,
+            currentValue: biomarker.value,
+            unit: biomarker.unit,
+            status: biomarker.status,
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatDate(DateTime date) {
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -206,6 +233,7 @@ class _BiomarkersPageState extends State<BiomarkersScreen> {
 }
 
 class _BiomarkerCardData {
+  final String type;
   final String name;
   final String category;
   final double value;
@@ -217,6 +245,7 @@ class _BiomarkerCardData {
   final String statusOverride;
 
   _BiomarkerCardData({
+    required this.type,
     required this.name,
     required this.category,
     required this.value,
